@@ -55,11 +55,32 @@ Miryokusha/
 │   │   ├── styles.go       # Lip Gloss styles
 │   │   ├── source/         # Source selection view
 │   │   ├── library/        # Manga library view
+│   │   │   ├── view.go     # Main library view
+│   │   │   ├── filters.go  # Filtering (read, unread, downloaded)
+│   │   │   └── sort.go     # Sorting options
 │   │   ├── reader/         # Manga reader view
+│   │   │   ├── view.go     # Reader interface
+│   │   │   ├── modes.go    # Reading modes (single, double, webtoon)
+│   │   │   └── controls.go # Reader controls
 │   │   ├── extensions/     # Extension management view
 │   │   │   ├── browser.go  # Browse available extensions
 │   │   │   ├── installed.go # Installed extensions list
 │   │   │   └── detail.go   # Extension details
+│   │   ├── categories/     # Category management
+│   │   │   ├── view.go     # Category list
+│   │   │   └── editor.go   # Create/edit categories
+│   │   ├── downloads/      # Download management
+│   │   │   ├── queue.go    # Download queue
+│   │   │   └── manager.go  # Download manager
+│   │   ├── browse/         # Browse sources
+│   │   │   ├── popular.go  # Popular manga
+│   │   │   ├── latest.go   # Latest updates
+│   │   │   └── search.go   # Global search
+│   │   ├── tracking/       # Tracker integration
+│   │   │   ├── list.go     # Tracker list
+│   │   │   └── bind.go     # Bind manga to tracker
+│   │   ├── updates/        # Library updates
+│   │   │   └── view.go     # Update history
 │   │   └── settings/       # Settings view
 │   └── storage/            # Local data persistence
 │       ├── cache.go
@@ -115,6 +136,53 @@ preferences:
   image_fit: "width"  # width, height, both
   double_page_mode: false
 
+library:
+  default_category: "Reading"
+  update_interval: 12h  # Check for new chapters every 12 hours
+  update_only_completed: false
+  update_only_started: true
+  auto_download_new_chapters: false
+  delete_read_chapters: false
+  sort_mode: "alphabetical"  # alphabetical, last_read, last_updated, unread_count
+  filter_downloaded: false
+  filter_unread: false
+  filter_bookmarked: false
+
+categories:
+  default: ["Reading", "Completed", "Plan to Read", "On Hold"]
+
+downloads:
+  location: "~/.local/share/miryokusha/downloads"
+  simultaneous_downloads: 3
+  only_on_wifi: false  # For future mobile version
+  delete_after_read: false
+
+tracking:
+  auto_track: true
+  auto_update_status: true
+  services:
+    - name: "MyAnimeList"
+      enabled: false
+      username: ""
+      token: ""
+    - name: "AniList"
+      enabled: false
+      username: ""
+      token: ""
+    - name: "Kitsu"
+      enabled: false
+      username: ""
+      token: ""
+
+reader:
+  reading_mode: "single_page"  # single_page, double_page, webtoon
+  reading_direction: "ltr"     # ltr, rtl, vertical
+  background_color: "#000000"
+  preload_pages: 3
+  show_page_number: true
+  keep_screen_on: true
+  volume_key_navigation: true
+
 extensions:
   auto_update_check: true
   update_check_interval: 24h
@@ -153,14 +221,17 @@ func (m Model) View() string
 ```
 
 **View Routing**:
-- Source selection (server/local on first run or source switch)
-- Library browser (main view - shows manga from current source)
-- Manga reader (reading view - works with any source)
-- Extension browser (browse and install extensions from Suwayomi)
-- Installed extensions (manage installed extensions)
-- Settings/preferences
-- Search interface (searches current source)
-- File browser (for ad-hoc local file selection)
+- **Library** - Main view with manga organized by categories
+- **Updates** - Recent chapter updates across all manga
+- **Browse** - Discover manga from sources (popular, latest, search)
+- **Downloads** - Manage downloaded chapters and queue
+- **Reader** - Reading view with multiple modes (single, double, webtoon)
+- **Extensions** - Browse and install extensions from Suwayomi
+- **Tracking** - Sync with MyAnimeList, AniList, Kitsu
+- **Categories** - Organize manga into collections
+- **Settings** - App preferences and configuration
+- **Search** - Global search across all sources or current source
+- **File Browser** - Ad-hoc local file selection (local mode)
 
 ### 3. Suwayomi API Client
 
@@ -175,11 +246,61 @@ func (m Model) View() string
 
 **Library & Manga**:
 ```
-GET  /api/v1/source/list          # Get available sources
-GET  /api/v1/manga/list           # Get manga library
-GET  /api/v1/manga/{id}           # Get manga details
-GET  /api/v1/manga/{id}/chapters  # Get chapters
-GET  /api/v1/chapter/{id}/page/{page}  # Get page image
+GET  /api/v1/source/list                # Get available sources
+GET  /api/v1/manga/list                 # Get manga library
+GET  /api/v1/manga/{id}                 # Get manga details
+GET  /api/v1/manga/{id}/chapters        # Get chapters
+GET  /api/v1/manga/{id}/category        # Get manga category
+POST /api/v1/manga/{id}/category        # Set manga category
+GET  /api/v1/chapter/{id}/page/{page}   # Get page image
+PATCH /api/v1/chapter/{id}              # Update chapter (mark as read, bookmark)
+POST /api/v1/chapter/batch              # Batch update chapters
+```
+
+**Categories**:
+```
+GET  /api/v1/category/list              # Get all categories
+POST /api/v1/category                   # Create category
+PUT  /api/v1/category/{id}              # Update category
+DELETE /api/v1/category/{id}            # Delete category
+GET  /api/v1/category/{id}/manga        # Get manga in category
+```
+
+**Downloads**:
+```
+GET  /api/v1/download/queue             # Get download queue
+POST /api/v1/download/chapter/{id}      # Add chapter to download queue
+DELETE /api/v1/download/chapter/{id}    # Remove from queue
+POST /api/v1/download/start             # Start downloads
+POST /api/v1/download/stop              # Stop downloads
+POST /api/v1/download/clear             # Clear completed downloads
+GET  /api/v1/download/status            # Get download status
+```
+
+**Updates**:
+```
+POST /api/v1/update/library             # Trigger library update
+POST /api/v1/update/category/{id}       # Update specific category
+GET  /api/v1/update/status              # Get update status
+GET  /api/v1/update/summary             # Get recent updates
+```
+
+**Tracking**:
+```
+GET  /api/v1/tracker/list               # Get available trackers
+POST /api/v1/tracker/{id}/login         # Login to tracker
+GET  /api/v1/manga/{id}/tracker         # Get tracker status for manga
+POST /api/v1/manga/{id}/tracker         # Bind manga to tracker
+PUT  /api/v1/manga/{id}/tracker         # Update tracker status
+DELETE /api/v1/manga/{id}/tracker       # Unbind manga from tracker
+```
+
+**Browse**:
+```
+GET  /api/v1/source/{id}/popular        # Get popular manga from source
+GET  /api/v1/source/{id}/latest         # Get latest manga from source
+GET  /api/v1/source/{id}/search         # Search manga in source
+POST /api/v1/search/global              # Global search across all sources
 ```
 
 **Extension Management**:
@@ -200,7 +321,319 @@ POST /api/v1/repository/add                    # Add custom repository
 DELETE /api/v1/repository/{id}                 # Remove repository
 ```
 
-### 4. Extension Management System
+### 4. Category Management
+
+**Categories help organize manga library similar to Mihon/Tachiyomi:**
+
+**Features**:
+- Create custom categories (Reading, Completed, Plan to Read, etc.)
+- Assign manga to multiple categories
+- Category-specific update settings
+- Default category for new manga
+- Reorder categories
+- Category-based filtering in library
+
+**Implementation Pattern**:
+```go
+// internal/tui/categories/view.go
+type CategoryModel struct {
+    categories    []suwayomi.Category
+    mangaCount    map[int]int  // Category ID -> manga count
+    selectedIndex int
+    editMode      bool
+}
+
+// Operations
+func (m CategoryModel) CreateCategory(name string) tea.Cmd
+func (m CategoryModel) DeleteCategory(id int) tea.Cmd
+func (m CategoryModel) ReorderCategories(from, to int) tea.Cmd
+func (m CategoryModel) AssignManga(mangaID int, categoryID int) tea.Cmd
+```
+
+**UI Layout**:
+```
+┌─ Categories ──────────────────────────────────────────────────────┐
+│                                                                    │
+│ ▸ All Manga                                              (1,247)  │
+│ ▸ Reading                                                  (342)  │
+│ ▸ Completed                                                (128)  │
+│ ▸ Plan to Read                                             (89)   │
+│ ▸ On Hold                                                  (23)   │
+│                                                                    │
+│ [n]ew  [e]dit  [d]elete  [↑↓]reorder  [Enter]view                │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 5. Download Management
+
+**Offline reading support is essential for manga readers:**
+
+**Features**:
+- Download chapters for offline reading
+- Download queue management (pause, resume, cancel)
+- Automatic download of new chapters
+- Storage management (view disk usage, delete old downloads)
+- Download only on WiFi (future mobile version)
+- Auto-delete read chapters
+- Download priority (next chapter, all chapters, unread chapters)
+
+**Implementation Pattern**:
+```go
+// internal/downloads/manager.go
+type DownloadManager struct {
+    queue        []DownloadItem
+    active       map[string]*DownloadJob
+    maxConcurrent int
+    storage      string
+    client       *suwayomi.Client
+}
+
+type DownloadItem struct {
+    MangaID    string
+    ChapterID  string
+    Priority   int
+    Status     DownloadStatus  // queued, downloading, completed, failed
+    Progress   int             // 0-100
+    Error      error
+}
+
+func (dm *DownloadManager) AddToQueue(chapterID string) error
+func (dm *DownloadManager) Start() error
+func (dm *DownloadManager) Pause() error
+func (dm *DownloadManager) Cancel(chapterID string) error
+func (dm *DownloadManager) GetStorageUsage() (int64, error)
+```
+
+**UI Layout**:
+```
+┌─ Downloads ───────────────────────────────────────────────────────┐
+│                                                                    │
+│ Active Downloads (2/3)                                             │
+│ ▼ One Piece - Chapter 1089                         [████░░] 67%   │
+│ ▼ Naruto - Chapter 700                             [██░░░░] 40%   │
+│                                                                    │
+│ Queue (5)                                                          │
+│ ○ Bleach - Chapter 686                                             │
+│ ○ Attack on Titan - Chapter 139                                   │
+│ ○ My Hero Academia - Chapter 400                                  │
+│                                                                    │
+│ Storage: 2.3 GB / 50 GB                                            │
+│ [p]ause  [r]esume  [c]ancel  [d]elete  [C]lear completed          │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 6. Tracking Integration
+
+**Sync reading progress with external services like Mihon:**
+
+**Supported Trackers**:
+- MyAnimeList (MAL)
+- AniList
+- Kitsu
+- MangaUpdates
+- Shikimori
+- Bangumi
+
+**Features**:
+- OAuth login for trackers
+- Bind manga to tracker entry
+- Auto-update reading progress
+- Sync status (Reading, Completed, On Hold, Dropped, Plan to Read)
+- Sync score/rating
+- Manual sync or auto-sync
+- Track multiple manga across different trackers
+
+**Implementation Pattern**:
+```go
+// internal/tracking/tracker.go
+type Tracker interface {
+    Name() string
+    Login(credentials map[string]string) error
+    Search(query string) ([]TrackEntry, error)
+    Bind(mangaID string, trackID string) error
+    UpdateProgress(mangaID string, chaptersRead int) error
+    UpdateStatus(mangaID string, status ReadingStatus) error
+    UpdateScore(mangaID string, score float64) error
+}
+
+type ReadingStatus string
+
+const (
+    StatusReading    ReadingStatus = "reading"
+    StatusCompleted  ReadingStatus = "completed"
+    StatusOnHold     ReadingStatus = "on_hold"
+    StatusDropped    ReadingStatus = "dropped"
+    StatusPlanToRead ReadingStatus = "plan_to_read"
+)
+```
+
+**UI Layout**:
+```
+┌─ Tracking: One Piece ─────────────────────────────────────────────┐
+│                                                                    │
+│ MyAnimeList              Status: Reading      Score: 9/10         │
+│ ├─ Progress: 1089/1100+  Last Updated: 2025-11-14                │
+│ └─ [Sync Now]  [Update Status]  [Unbind]                         │
+│                                                                    │
+│ AniList                  Status: Reading      Score: 95/100       │
+│ ├─ Progress: 1089/1100+  Last Updated: 2025-11-14                │
+│ └─ [Sync Now]  [Update Status]  [Unbind]                         │
+│                                                                    │
+│ + Add Tracker                                                      │
+│                                                                    │
+│ Auto-update: [✓] On chapter read   [✓] On status change           │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 7. Library Updates & Notifications
+
+**Automatic checking for new chapters:**
+
+**Features**:
+- Global library update (check all manga)
+- Category-specific updates
+- Update scheduling (every X hours)
+- Smart update (only update likely-to-update manga)
+- Update only started manga
+- Update only completed manga
+- Update notifications
+- Update history view
+
+**Implementation Pattern**:
+```go
+// internal/updates/updater.go
+type LibraryUpdater struct {
+    client        *suwayomi.Client
+    updateQueue   []UpdateTask
+    lastUpdate    time.Time
+    interval      time.Duration
+    notifier      *Notifier
+}
+
+type UpdateTask struct {
+    MangaID       string
+    LastChecked   time.Time
+    NewChapters   []Chapter
+    Status        UpdateStatus
+}
+
+func (lu *LibraryUpdater) UpdateLibrary() error
+func (lu *LibraryUpdater) UpdateCategory(categoryID int) error
+func (lu *LibraryUpdater) ScheduleUpdates(interval time.Duration) error
+```
+
+### 8. Browse & Discover
+
+**Discover new manga from sources:**
+
+**Features**:
+- Browse popular manga from each source
+- Browse latest updates from each source
+- Global search across all installed sources
+- Source-specific filters (genre, status, etc.)
+- Add manga to library from browse
+- Preview manga before adding
+
+**UI Layout**:
+```
+┌─ Browse: MangaDex ────────────────────────────────────────────────┐
+│                                                                    │
+│ [Popular] [Latest] [Search]                    Sort: [Popularity▼]│
+│                                                                    │
+│ ┌──────────┐  One Piece                                    ★ 9.2  │
+│ │  [IMG]   │  Adventure, Action • Ongoing                         │
+│ │          │  Latest: Ch. 1089 • 2 hours ago                      │
+│ └──────────┘  [+] Add to Library   [Read]                         │
+│                                                                    │
+│ ┌──────────┐  Attack on Titan                               ★ 9.0  │
+│ │  [IMG]   │  Action, Drama • Completed                           │
+│ │          │  Latest: Ch. 139 • Final                             │
+│ └──────────┘  [✓] In Library   [Read]                             │
+│                                                                    │
+│ [g]lobal search  [f]ilters  [s]ource  [↑↓]navigate  [Enter]view  │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 9. Advanced Library Features
+
+**Library filtering, sorting, and bulk operations:**
+
+**Filtering**:
+- Filter by read status (all, read, unread)
+- Filter by download status (all, downloaded, not downloaded)
+- Filter by tracker status
+- Filter by bookmark
+- Filter by category
+- Combine multiple filters
+
+**Sorting**:
+- Alphabetical (A-Z, Z-A)
+- Last read
+- Last updated
+- Unread chapter count
+- Total chapter count
+- Date added
+
+**Bulk Operations**:
+- Select multiple manga
+- Mark all as read/unread
+- Download all chapters
+- Delete downloads
+- Change category
+- Update tracker status
+- Remove from library
+
+### 10. Advanced Reader Features
+
+**Enhanced reading experience:**
+
+**Reading Modes**:
+- Single page (one page at a time)
+- Double page (two pages side-by-side)
+- Webtoon mode (continuous vertical scroll)
+
+**Reading Direction**:
+- Left-to-right (Western comics)
+- Right-to-left (Japanese manga)
+- Vertical (Webtoons)
+
+**Reader Features**:
+- Page preloading (load next N pages)
+- Bookmarks (save position in chapter)
+- Page number display
+- Background color customization
+- Brightness control (future)
+- Color filters (future)
+- Crop borders
+- Volume key navigation
+- Tap zones for navigation
+- Fullscreen mode
+- Rotation lock
+
+### 11. Backup & Restore
+
+**Protect library and settings:**
+
+**Features**:
+- Export library backup (JSON format)
+- Export reading history
+- Export categories and settings
+- Restore from backup
+- Scheduled auto-backup
+- Cloud storage sync (optional, via external tools)
+
+### 12. Migration Tools
+
+**Move manga between sources:**
+
+**Features**:
+- Migrate manga from one source to another
+- Preserve reading history
+- Preserve categories
+- Batch migration
+- Duplicate detection
+
+### 13. Extension Management System
 
 **Extension management is a core feature for Suwayomi integration:**
 
@@ -300,7 +733,7 @@ func (m BrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 - View source code/repository (if available)
 - Browse manga from this extension
 
-### 5. Local File Support
+### 14. Local File Support
 
 **Two Primary Strategies for Local File Reading:**
 
@@ -406,7 +839,7 @@ func (s *Scanner) Scan() ([]*LocalManga, error) {
 - Extract cover images for thumbnails
 - Remember reading position
 
-### 6. Unified Source Interface
+### 15. Unified Source Interface
 
 **Abstract sources for flexibility**:
 
@@ -439,7 +872,7 @@ type LocalSource struct { /* ... */ }
 - Consistent reading experience
 - Easy to add new source types (Komga, Kavita, etc.)
 
-### 7. Error Handling Strategy
+### 16. Error Handling Strategy
 
 **Graceful Degradation**:
 - Network errors → Show connection status indicator
@@ -612,10 +1045,22 @@ git push -u origin feature/server-config
    - `Home/End` - Jump to first/last
 
    **Library & Sources**:
-   - `/` - Search
+   - `/` - Search (current source or global)
    - `s` - Switch source (server/local)
    - `o` - Open local file
    - `r` - Refresh/rescan current source
+   - `c` - Manage categories
+   - `F` - Filter library
+   - `S` - Sort library
+   - `u` - Check for updates
+
+   **Manga Actions**:
+   - `m` - Mark as read/unread
+   - `b` - Bookmark chapter
+   - `D` - Download chapter(s)
+   - `t` - Track manga (bind to MAL/AniList)
+   - `C` - Change category
+   - `x` - Select multiple (bulk actions)
 
    **Extensions** (in extension views):
    - `e` - Browse available extensions
@@ -918,14 +1363,23 @@ For contributors and AI assistants:
 
 **Last Updated**: 2025-11-15
 **Project Status**: Initial setup phase
-**Next Steps**:
+
+**Priority Next Steps**:
 1. Initialize Go modules
 2. Set up basic TUI framework
 3. Implement source abstraction layer
 4. Implement server configuration
-5. Implement local file reading (CBZ/CBR/PDF)
-6. Implement directory scanning
-7. Add CLI argument parsing
-8. Implement extension browser view
-9. Implement installed extensions management
-10. Add extension installation/update/uninstall functionality
+5. Implement basic library view with categories
+6. Implement manga reader with multiple modes
+7. Implement extension browser and management
+8. Implement download management
+9. Implement library updates
+10. Implement tracking integration
+
+**Secondary Features** (implement after core functionality):
+11. Local file reading (CBZ/CBR/PDF)
+12. Directory scanning
+13. Browse/discover views
+14. Backup & restore
+15. Migration tools
+16. Advanced filters and bulk operations
