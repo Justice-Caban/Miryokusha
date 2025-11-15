@@ -1,6 +1,7 @@
 package history
 
 import (
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 	"time"
@@ -20,32 +21,24 @@ const (
 	ModeStatistics
 )
 
-// Color palette (duplicated to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorMuted     = lipgloss.Color("242") // Gray
-)
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	sectionHeaderStyle = lipgloss.NewStyle().
-				Foreground(colorSecondary).
+				Foreground(theme.ColorSecondary).
 				Bold(true)
 
 	statStyle = lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(theme.ColorAccent).
 			Bold(true)
 )
 
@@ -247,7 +240,7 @@ func (m Model) renderHeader() string {
 	title := titleStyle.Render(modeStr)
 
 	info := lipgloss.NewStyle().
-		Foreground(colorMuted).
+		Foreground(theme.ColorMuted).
 		Render("Press Tab to switch modes")
 
 	return title + "\n" + info
@@ -282,7 +275,7 @@ func (m Model) renderHistory() string {
 				itemStyle := lipgloss.NewStyle()
 				if isCursor {
 					itemStyle = itemStyle.
-						Background(colorPrimary).
+						Background(theme.ColorPrimary).
 						Foreground(lipgloss.Color("#000000")).
 						Bold(true).
 						Width(m.width - 4)
@@ -297,7 +290,7 @@ func (m Model) renderHistory() string {
 				line := fmt.Sprintf("  %s - %s  %s",
 					timeStr,
 					entry.MangaTitle,
-					lipgloss.NewStyle().Foreground(colorMuted).Render(chapterStr),
+					lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(chapterStr),
 				)
 
 				b.WriteString(itemStyle.Render(line))
@@ -386,7 +379,7 @@ func (m Model) renderContinueReading() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
@@ -404,7 +397,7 @@ func (m Model) renderContinueReading() string {
 			entry.CurrentPage+1,
 			entry.TotalPages,
 			progressBar,
-			lipgloss.NewStyle().Foreground(colorMuted).Render(timeSince),
+			lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(timeSince),
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -478,7 +471,7 @@ func (m Model) renderMiniProgressBar(pct float64, width int) string {
 	}
 
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-	return lipgloss.NewStyle().Foreground(colorAccent).Render(bar)
+	return lipgloss.NewStyle().Foreground(theme.ColorAccent).Render(bar)
 }
 
 // renderFooter renders the footer with controls

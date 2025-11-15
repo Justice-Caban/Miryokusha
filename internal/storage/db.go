@@ -30,10 +30,22 @@ func NewDB() (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	conn, err := sql.Open("sqlite3", dbPath)
+	// Open database with performance pragmas
+	// WAL mode: Better concurrency for read/write operations
+	// Busy timeout: Handles concurrent access gracefully (5 seconds)
+	// Synchronous NORMAL: Faster writes while maintaining safety
+	// Cache size: 10MB cache for better query performance
+	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_cache_size=-10000&_foreign_keys=ON", dbPath)
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	// Configure connection pool for optimal SQLite performance
+	// SQLite benefits from a single writer connection
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
+	conn.SetConnMaxLifetime(0) // Connections live forever
 
 	db := &DB{conn: conn}
 

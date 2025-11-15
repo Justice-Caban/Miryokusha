@@ -1,19 +1,20 @@
 package tui
 
 import (
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Color palette
+// Re-export theme colors for backward compatibility
 var (
-	ColorPrimary   = lipgloss.Color("205") // Pink
-	ColorSecondary = lipgloss.Color("99")  // Purple
-	ColorAccent    = lipgloss.Color("86")  // Cyan
-	ColorSuccess   = lipgloss.Color("42")  // Green
-	ColorWarning   = lipgloss.Color("214") // Orange
-	ColorError     = lipgloss.Color("196") // Red
-	ColorMuted     = lipgloss.Color("242") // Gray
-	ColorBorder    = lipgloss.Color("238") // Dark gray
+	ColorPrimary   = theme.ColorPrimary
+	ColorSecondary = theme.ColorSecondary
+	ColorAccent    = theme.ColorAccent
+	ColorSuccess   = theme.ColorSuccess
+	ColorWarning   = theme.ColorWarning
+	ColorError     = theme.ColorError
+	ColorMuted     = theme.ColorMuted
+	ColorBorder    = theme.ColorBorder
 )
 
 // Common styles

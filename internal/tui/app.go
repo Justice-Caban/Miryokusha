@@ -150,6 +150,34 @@ func (m AppModel) Init() tea.Cmd {
 	return nil
 }
 
+// navigateToView handles navigation to a specific view from home
+func (m AppModel) navigateToView(view ViewType) (AppModel, tea.Cmd) {
+	if m.currentView != ViewHome {
+		return m, nil
+	}
+
+	m.currentView = view
+	sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
+
+	var cmd tea.Cmd
+	switch view {
+	case ViewLibrary:
+		m.libraryModel, cmd = m.libraryModel.Update(sizeMsg)
+	case ViewHistory:
+		m.historyModel, cmd = m.historyModel.Update(sizeMsg)
+	case ViewDownloads:
+		m.downloadsModel, cmd = m.downloadsModel.Update(sizeMsg)
+	case ViewExtensions:
+		m.extensionsModel, cmd = m.extensionsModel.Update(sizeMsg)
+	case ViewSettings:
+		m.settingsModel, cmd = m.settingsModel.Update(sizeMsg)
+	case ViewCategories:
+		m.categoriesModel, cmd = m.categoriesModel.Update(sizeMsg)
+	}
+
+	return m, cmd
+}
+
 // Update handles all messages and routes them appropriately
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -216,49 +244,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// View navigation shortcuts (only from home)
 		case "1":
-			if m.currentView == ViewHome {
-				m.currentView = ViewHome
-			}
+			return m.navigateToView(ViewHome)
 		case "2":
-			if m.currentView == ViewHome {
-				m.currentView = ViewLibrary
-				m.libraryModel, cmd = m.libraryModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewLibrary)
 		case "3":
-			if m.currentView == ViewHome {
-				m.currentView = ViewHistory
-				m.historyModel, cmd = m.historyModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewHistory)
 		case "4":
-			if m.currentView == ViewHome {
-				m.currentView = ViewBrowse
-			}
+			return m.navigateToView(ViewBrowse)
 		case "5":
-			if m.currentView == ViewHome {
-				m.currentView = ViewDownloads
-				m.downloadsModel, cmd = m.downloadsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewDownloads)
 		case "6":
-			if m.currentView == ViewHome {
-				m.currentView = ViewExtensions
-				m.extensionsModel, cmd = m.extensionsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewExtensions)
 		case "7":
-			if m.currentView == ViewHome {
-				m.currentView = ViewSettings
-				m.settingsModel, cmd = m.settingsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewSettings)
 		case "8":
-			if m.currentView == ViewHome {
-				m.currentView = ViewCategories
-				m.categoriesModel, cmd = m.categoriesModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewCategories)
 		}
 
 	case tea.WindowSizeMsg:

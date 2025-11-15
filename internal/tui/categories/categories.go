@@ -5,39 +5,29 @@ import (
 	"strings"
 
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-// Color palette (duplicated to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorWarning   = lipgloss.Color("214") // Orange
-	colorError     = lipgloss.Color("196") // Red
-	colorMuted     = lipgloss.Color("242") // Gray
 )
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	sectionStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			MarginTop(1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Background(colorPrimary).
+			Background(theme.ColorPrimary).
 			Foreground(lipgloss.Color("#000000")).
 			Bold(true).
 			PaddingLeft(1).
@@ -48,14 +38,14 @@ var (
 			PaddingRight(1)
 
 	mutedStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+			Foreground(theme.ColorMuted)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(colorSuccess).
+			Foreground(theme.ColorSuccess).
 			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(colorError).
+			Foreground(theme.ColorError).
 			Bold(true)
 )
 

@@ -6,31 +6,24 @@ import (
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-// Color palette (duplicated from tui package to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorMuted     = lipgloss.Color("242") // Gray
 )
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	mutedStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+			Foreground(theme.ColorMuted)
 )
 
 // centeredText centers text in the given width and height
@@ -349,18 +342,18 @@ func (m Model) renderHeader() string {
 	}
 
 	info := lipgloss.NewStyle().
-		Foreground(colorSecondary).
+		Foreground(theme.ColorSecondary).
 		Render(fmt.Sprintf("Sort: %s | Filter: %s | %d manga", sortModeStr, filterModeStr, len(m.filteredList)))
 
 	// Search bar
 	searchBar := ""
 	if m.searchActive {
 		searchBar = "\n" + lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(theme.ColorAccent).
 			Render(fmt.Sprintf("Search: %s_", m.searchQuery))
 	} else if m.searchQuery != "" {
 		searchBar = "\n" + lipgloss.NewStyle().
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			Render(fmt.Sprintf("Search: %s", m.searchQuery))
 	}
 
@@ -394,7 +387,7 @@ func (m Model) renderMangaList() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
@@ -419,7 +412,7 @@ func (m Model) renderMangaList() string {
 		line := fmt.Sprintf("%s %s %s",
 			readIndicator,
 			manga.Title,
-			lipgloss.NewStyle().Foreground(colorMuted).Render(sourceIndicator),
+			lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(sourceIndicator),
 		)
 
 		b.WriteString(itemStyle.Render(line))

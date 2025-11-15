@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 	"time"
@@ -20,32 +21,24 @@ const (
 	ModeWebtoon
 )
 
-// Color palette (duplicated to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorMuted     = lipgloss.Color("242") // Gray
-)
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	pageInfoStyle = lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(theme.ColorAccent).
 			Bold(true)
 
 	chapterInfoStyle = lipgloss.NewStyle().
-				Foreground(colorSecondary)
+				Foreground(theme.ColorSecondary)
 )
 
 // Model represents the manga reader model
@@ -358,12 +351,12 @@ func (m Model) renderHeader() string {
 	case ModeWebtoon:
 		modeStr = "Webtoon"
 	}
-	mode := lipgloss.NewStyle().Foreground(colorMuted).Render(fmt.Sprintf("[%s]", modeStr))
+	mode := lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(fmt.Sprintf("[%s]", modeStr))
 
 	// Bookmark indicator
 	bookmarkIndicator := ""
 	if m.bookmarked {
-		bookmarkIndicator = lipgloss.NewStyle().Foreground(colorSuccess).Render(" ★")
+		bookmarkIndicator = lipgloss.NewStyle().Foreground(theme.ColorSuccess).Render(" ★")
 	}
 
 	firstLine := lipgloss.JoinHorizontal(lipgloss.Left, title, "  ", pageInfo, bookmarkIndicator)
@@ -408,7 +401,7 @@ func (m Model) renderSinglePage() string {
 
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorMuted).
+		BorderForeground(theme.ColorMuted).
 		Padding(2, 4).
 		Width(m.width - 4).
 		Height(m.height - 15).
@@ -438,7 +431,7 @@ func (m Model) renderDoublePage() string {
 
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorMuted).
+		BorderForeground(theme.ColorMuted).
 		Padding(2, 2).
 		Width((m.width / 2) - 4).
 		Height(m.height - 15).
@@ -464,7 +457,7 @@ func (m Model) renderWebtoon() string {
 
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorMuted).
+		BorderForeground(theme.ColorMuted).
 		Padding(2, 4).
 		Width(m.width - 4).
 		Height(m.height - 15).
@@ -509,12 +502,12 @@ func (m Model) renderProgressBar() string {
 
 	label := fmt.Sprintf("%.0f%%", progressPct*100)
 
-	progressStyle := lipgloss.NewStyle().Foreground(colorAccent)
+	progressStyle := lipgloss.NewStyle().Foreground(theme.ColorAccent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Left,
 		progressStyle.Render(bar),
 		" ",
-		lipgloss.NewStyle().Foreground(colorMuted).Render(label),
+		lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(label),
 	)
 }
 

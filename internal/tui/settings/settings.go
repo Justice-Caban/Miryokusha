@@ -8,55 +8,45 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/config"
 	"github.com/Justice-Caban/Miryokusha/internal/server"
 	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-// Color palette (duplicated to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorWarning   = lipgloss.Color("214") // Orange
-	colorError     = lipgloss.Color("196") // Red
-	colorMuted     = lipgloss.Color("242") // Gray
 )
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	sectionStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			MarginTop(1).
 			MarginBottom(1)
 
 	labelStyle = lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(theme.ColorAccent).
 			Width(20)
 
 	valueStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF"))
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(colorSuccess).
+			Foreground(theme.ColorSuccess).
 			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(colorError).
+			Foreground(theme.ColorError).
 			Bold(true)
 
 	mutedStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+			Foreground(theme.ColorMuted)
 )
 
 // Model represents the settings view model
@@ -341,9 +331,9 @@ func (m Model) renderServerManagement() string {
 	case server.StatusRunning:
 		statusDisplay = successStyle.Render("● Running")
 	case server.StatusStarting:
-		statusDisplay = lipgloss.NewStyle().Foreground(colorWarning).Render("⟳ Starting")
+		statusDisplay = lipgloss.NewStyle().Foreground(theme.ColorWarning).Render("⟳ Starting")
 	case server.StatusStopping:
-		statusDisplay = lipgloss.NewStyle().Foreground(colorWarning).Render("⟳ Stopping")
+		statusDisplay = lipgloss.NewStyle().Foreground(theme.ColorWarning).Render("⟳ Stopping")
 	case server.StatusStopped:
 		statusDisplay = mutedStyle.Render("○ Stopped")
 	case server.StatusError:

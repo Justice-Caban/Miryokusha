@@ -1,6 +1,7 @@
 package extensions
 
 import (
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 
@@ -17,33 +18,24 @@ const (
 	ModeInstalled
 )
 
-// Color palette (duplicated to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorWarning   = lipgloss.Color("214") // Orange
-	colorMuted     = lipgloss.Color("242") // Gray
-)
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	statusStyle = lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(theme.ColorAccent).
 			Bold(true)
 
 	nsfwStyle = lipgloss.NewStyle().
-			Foreground(colorWarning).
+			Foreground(theme.ColorWarning).
 			Bold(true)
 )
 
@@ -341,18 +333,18 @@ func (m Model) renderHeader() string {
 	}
 
 	info := lipgloss.NewStyle().
-		Foreground(colorMuted).
+		Foreground(theme.ColorMuted).
 		Render(strings.Join(filters, " | "))
 
 	// Search bar
 	searchBar := ""
 	if m.searchActive {
 		searchBar = "\n" + lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(theme.ColorAccent).
 			Render(fmt.Sprintf("Search: %s_", m.searchQuery))
 	} else if m.searchQuery != "" {
 		searchBar = "\n" + lipgloss.NewStyle().
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			Render(fmt.Sprintf("Search: %s", m.searchQuery))
 	}
 
@@ -390,7 +382,7 @@ func (m Model) renderBrowse() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
@@ -402,10 +394,10 @@ func (m Model) renderBrowse() string {
 			if ext.HasUpdate {
 				statusIndicator = statusStyle.Render("[UPDATE]")
 			} else {
-				statusIndicator = lipgloss.NewStyle().Foreground(colorSuccess).Render("[✓]")
+				statusIndicator = lipgloss.NewStyle().Foreground(theme.ColorSuccess).Render("[✓]")
 			}
 		} else {
-			statusIndicator = lipgloss.NewStyle().Foreground(colorMuted).Render("[ ]")
+			statusIndicator = lipgloss.NewStyle().Foreground(theme.ColorMuted).Render("[ ]")
 		}
 
 		// NSFW indicator
@@ -416,7 +408,7 @@ func (m Model) renderBrowse() string {
 
 		// Language badge
 		langBadge := lipgloss.NewStyle().
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			Render(fmt.Sprintf("[%s]", ext.Language))
 
 		line := fmt.Sprintf("%s %s %s %s v%s",
@@ -465,7 +457,7 @@ func (m Model) renderInstalled() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
@@ -476,9 +468,9 @@ func (m Model) renderInstalled() string {
 		if ext.HasUpdate {
 			status = statusStyle.Render("[UPDATE]")
 		} else if ext.IsObsolete {
-			status = lipgloss.NewStyle().Foreground(colorWarning).Render("[OBSOLETE]")
+			status = lipgloss.NewStyle().Foreground(theme.ColorWarning).Render("[OBSOLETE]")
 		} else {
-			status = lipgloss.NewStyle().Foreground(colorSuccess).Render("[✓]")
+			status = lipgloss.NewStyle().Foreground(theme.ColorSuccess).Render("[✓]")
 		}
 
 		// NSFW indicator
@@ -489,7 +481,7 @@ func (m Model) renderInstalled() string {
 
 		// Language badge
 		langBadge := lipgloss.NewStyle().
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			Render(fmt.Sprintf("[%s]", ext.Language))
 
 		line := fmt.Sprintf("%s %s %s %s v%s",

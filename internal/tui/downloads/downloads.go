@@ -1,6 +1,7 @@
 package downloads
 
 import (
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 	"time"
@@ -10,44 +11,34 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Color palette (duplicated to avoid import cycle)
-var (
-	colorPrimary   = lipgloss.Color("205") // Pink
-	colorSecondary = lipgloss.Color("99")  // Purple
-	colorAccent    = lipgloss.Color("86")  // Cyan
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorWarning   = lipgloss.Color("214") // Orange
-	colorError     = lipgloss.Color("196") // Red
-	colorMuted     = lipgloss.Color("242") // Gray
-)
 
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPrimary).
+			Foreground(theme.ColorPrimary).
 			MarginBottom(1)
 
 	sectionStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorSecondary).
+			Foreground(theme.ColorSecondary).
 			MarginTop(1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(theme.ColorMuted).
 			MarginTop(1)
 
 	mutedStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+			Foreground(theme.ColorMuted)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(colorSuccess)
+			Foreground(theme.ColorSuccess)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(colorError)
+			Foreground(theme.ColorError)
 
 	warningStyle = lipgloss.NewStyle().
-			Foreground(colorWarning)
+			Foreground(theme.ColorWarning)
 )
 
 // Model represents the downloads view model
@@ -225,7 +216,7 @@ func (m Model) renderHeader() string {
 	title := titleStyle.Render("Downloads")
 
 	info := lipgloss.NewStyle().
-		Foreground(colorSecondary).
+		Foreground(theme.ColorSecondary).
 		Render(fmt.Sprintf(
 			"Active: %d | Queued: %d | Completed: %d | Failed: %d",
 			m.stats.ActiveDownloads,
@@ -246,11 +237,11 @@ func (m Model) renderTabs() string {
 		style := lipgloss.NewStyle().Padding(0, 2)
 		if i == m.selectedTab {
 			style = style.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true)
 		} else {
-			style = style.Foreground(colorMuted)
+			style = style.Foreground(theme.ColorMuted)
 		}
 		renderedTabs = append(renderedTabs, style.Render(tab))
 	}
@@ -274,7 +265,7 @@ func (m Model) renderActiveDownloads() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
@@ -327,7 +318,7 @@ func (m Model) renderQueue() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
@@ -392,7 +383,7 @@ func (m Model) renderCompleted() string {
 		itemStyle := lipgloss.NewStyle()
 		if isCursor {
 			itemStyle = itemStyle.
-				Background(colorPrimary).
+				Background(theme.ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Width(m.width - 4)
