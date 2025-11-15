@@ -1,0 +1,160 @@
+package source
+
+import (
+	"time"
+)
+
+// SourceType represents the type of manga source
+type SourceType string
+
+const (
+	SourceTypeSuwayomi SourceType = "suwayomi"
+	SourceTypeLocal    SourceType = "local"
+)
+
+// Manga represents manga metadata
+type Manga struct {
+	ID          string
+	Title       string
+	Author      string
+	Artist      string
+	Description string
+	Status      string
+	CoverURL    string
+	Genres      []string
+	SourceType  SourceType
+	SourceID    string
+}
+
+// Chapter represents a manga chapter
+type Chapter struct {
+	ID            string
+	MangaID       string
+	Title         string
+	ChapterNumber float64
+	PageCount     int
+	ScanlatorGroup string
+	UploadDate    time.Time
+	SourceType    SourceType
+	SourceID      string
+}
+
+// Page represents a manga page
+type Page struct {
+	Index    int
+	URL      string
+	ImageData []byte // For local files
+}
+
+// Source is the interface that all manga sources must implement
+type Source interface {
+	// GetType returns the type of this source
+	GetType() SourceType
+
+	// GetID returns a unique identifier for this source instance
+	GetID() string
+
+	// GetName returns a human-readable name for this source
+	GetName() string
+
+	// ListManga lists all available manga from this source
+	ListManga() ([]*Manga, error)
+
+	// GetManga retrieves detailed metadata for a specific manga
+	GetManga(mangaID string) (*Manga, error)
+
+	// ListChapters lists all chapters for a specific manga
+	ListChapters(mangaID string) ([]*Chapter, error)
+
+	// GetChapter retrieves detailed metadata for a specific chapter
+	GetChapter(chapterID string) (*Chapter, error)
+
+	// GetPage retrieves a specific page from a chapter
+	GetPage(chapterID string, pageIndex int) (*Page, error)
+
+	// GetAllPages retrieves all pages from a chapter
+	GetAllPages(chapterID string) ([]*Page, error)
+
+	// Search searches for manga by query (optional, may return nil for unsupported sources)
+	Search(query string) ([]*Manga, error)
+
+	// IsAvailable checks if the source is currently accessible
+	IsAvailable() bool
+}
+
+// SourceManager manages multiple manga sources
+type SourceManager struct {
+	sources []Source
+}
+
+// NewSourceManager creates a new source manager
+func NewSourceManager() *SourceManager {
+	return &SourceManager{
+		sources: make([]Source, 0),
+	}
+}
+
+// AddSource adds a source to the manager
+func (sm *SourceManager) AddSource(source Source) {
+	sm.sources = append(sm.sources, source)
+}
+
+// GetSources returns all registered sources
+func (sm *SourceManager) GetSources() []Source {
+	return sm.sources
+}
+
+// GetSource retrieves a source by ID
+func (sm *SourceManager) GetSource(id string) Source {
+	for _, source := range sm.sources {
+		if source.GetID() == id {
+			return source
+		}
+	}
+	return nil
+}
+
+// GetSourcesByType retrieves all sources of a specific type
+func (sm *SourceManager) GetSourcesByType(sourceType SourceType) []Source {
+	var result []Source
+	for _, source := range sm.sources {
+		if source.GetType() == sourceType {
+			result = append(result, source)
+		}
+	}
+	return result
+}
+
+// ListAllManga lists manga from all available sources
+func (sm *SourceManager) ListAllManga() ([]*Manga, error) {
+	var allManga []*Manga
+	for _, source := range sm.sources {
+		if !source.IsAvailable() {
+			continue
+		}
+		manga, err := source.ListManga()
+		if err != nil {
+			// Log error but continue with other sources
+			continue
+		}
+		allManga = append(allManga, manga...)
+	}
+	return allManga, nil
+}
+
+// SearchAllSources searches for manga across all sources
+func (sm *SourceManager) SearchAllSources(query string) ([]*Manga, error) {
+	var results []*Manga
+	for _, source := range sm.sources {
+		if !source.IsAvailable() {
+			continue
+		}
+		manga, err := source.Search(query)
+		if err != nil {
+			// Log error but continue with other sources
+			continue
+		}
+		results = append(results, manga...)
+	}
+	return results, nil
+}
