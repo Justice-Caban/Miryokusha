@@ -65,6 +65,10 @@ var (
 	SuccessStyle = lipgloss.NewStyle().
 			Foreground(ColorSuccess).
 			Bold(true)
+
+	// Muted text style
+	MutedStyle = lipgloss.NewStyle().
+			Foreground(ColorMuted)
 )
 
 // GetStatusBarText formats a status bar message
@@ -77,4 +81,13 @@ func GetStatusBarText(items ...string) string {
 		result += item
 	}
 	return StatusBarStyle.Render(result)
+}
+
+// CenteredText centers text in the given width and height
+func CenteredText(width, height int, text string) string {
+	style := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Align(lipgloss.Center, lipgloss.Center)
+	return style.Render(text)
 }

@@ -3,6 +3,10 @@ package tui
 import (
 	"fmt"
 
+	"github.com/Justice-Caban/Miryokusha/internal/config"
+	"github.com/Justice-Caban/Miryokusha/internal/source"
+	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -27,12 +31,44 @@ type AppModel struct {
 	width       int
 	height      int
 	err         error
+
+	// Dependencies
+	config        *config.Config
+	sourceManager *source.SourceManager
+	storage       *storage.Storage
+
+	// View models
+	libraryModel library.Model
 }
 
 // NewAppModel creates a new application model
 func NewAppModel() AppModel {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		// Use default config if loading fails
+		cfg = config.DefaultConfig()
+	}
+
+	// Initialize storage
+	st, err := storage.NewStorage()
+	if err != nil {
+		// Handle error but continue (storage is optional)
+		st = nil
+	}
+
+	// Initialize source manager
+	sm := source.NewSourceManager()
+
+	// Initialize library model
+	libModel := library.NewModel(sm, st)
+
 	return AppModel{
-		currentView: ViewHome,
+		currentView:   ViewHome,
+		config:        cfg,
+		sourceManager: sm,
+		storage:       st,
+		libraryModel:  libModel,
 	}
 }
 
@@ -43,37 +79,74 @@ func (m AppModel) Init() tea.Cmd {
 
 // Update handles all messages and routes them appropriately
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle global shortcuts
+		if m.currentView != ViewHome {
+			switch msg.String() {
+			case "esc":
+				m.currentView = ViewHome
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
+			return m, tea.Quit
+
+		case "q":
 			if m.currentView == ViewHome {
 				return m, tea.Quit
 			}
 			m.currentView = ViewHome
 			return m, nil
 
-		// View navigation shortcuts
+		// View navigation shortcuts (only from home)
 		case "1":
-			m.currentView = ViewHome
+			if m.currentView == ViewHome {
+				m.currentView = ViewHome
+			}
 		case "2":
-			m.currentView = ViewLibrary
+			if m.currentView == ViewHome {
+				m.currentView = ViewLibrary
+				m.libraryModel, cmd = m.libraryModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+				return m, cmd
+			}
 		case "3":
-			m.currentView = ViewHistory
+			if m.currentView == ViewHome {
+				m.currentView = ViewHistory
+			}
 		case "4":
-			m.currentView = ViewBrowse
+			if m.currentView == ViewHome {
+				m.currentView = ViewBrowse
+			}
 		case "5":
-			m.currentView = ViewDownloads
+			if m.currentView == ViewHome {
+				m.currentView = ViewDownloads
+			}
 		case "6":
-			m.currentView = ViewExtensions
+			if m.currentView == ViewHome {
+				m.currentView = ViewExtensions
+			}
 		case "7":
-			m.currentView = ViewSettings
+			if m.currentView == ViewHome {
+				m.currentView = ViewSettings
+			}
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
+	}
+
+	// Route messages to active view
+	switch m.currentView {
+	case ViewLibrary:
+		m.libraryModel, cmd = m.libraryModel.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -92,7 +165,7 @@ func (m AppModel) View() string {
 	case ViewHome:
 		content = m.renderHomeView()
 	case ViewLibrary:
-		content = m.renderPlaceholderView("Library", "📚 Your manga library will appear here")
+		content = m.libraryModel.View()
 	case ViewHistory:
 		content = m.renderPlaceholderView("Reading History", "📖 Your reading history will appear here")
 	case ViewBrowse:
