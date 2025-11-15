@@ -7,6 +7,7 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/reader"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -17,6 +18,7 @@ type ViewType string
 const (
 	ViewHome       ViewType = "home"
 	ViewLibrary    ViewType = "library"
+	ViewReader     ViewType = "reader"
 	ViewHistory    ViewType = "history"
 	ViewBrowse     ViewType = "browse"
 	ViewDownloads  ViewType = "downloads"
@@ -39,6 +41,7 @@ type AppModel struct {
 
 	// View models
 	libraryModel library.Model
+	readerModel  *reader.Model
 }
 
 // NewAppModel creates a new application model
@@ -82,25 +85,46 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case OpenReaderMsg:
+		// Launch reader with manga and chapter
+		readerModel := reader.NewModel(msg.Manga, msg.Chapter, m.sourceManager, m.storage)
+		m.readerModel = &readerModel
+		m.currentView = ViewReader
+		return m, m.readerModel.Init()
+
 	case tea.KeyMsg:
 		// Handle global shortcuts
 		if m.currentView != ViewHome {
 			switch msg.String() {
 			case "esc":
+				// Save reader session before closing
+				if m.currentView == ViewReader && m.readerModel != nil {
+					m.readerModel.SaveSession()
+				}
 				m.currentView = ViewHome
+				m.readerModel = nil
 				return m, nil
 			}
 		}
 
 		switch msg.String() {
 		case "ctrl+c":
+			// Save reader session before quitting
+			if m.currentView == ViewReader && m.readerModel != nil {
+				m.readerModel.SaveSession()
+			}
 			return m, tea.Quit
 
 		case "q":
 			if m.currentView == ViewHome {
 				return m, tea.Quit
 			}
+			// Save reader session before going home
+			if m.currentView == ViewReader && m.readerModel != nil {
+				m.readerModel.SaveSession()
+			}
 			m.currentView = ViewHome
+			m.readerModel = nil
 			return m, nil
 
 		// View navigation shortcuts (only from home)
@@ -147,6 +171,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ViewLibrary:
 		m.libraryModel, cmd = m.libraryModel.Update(msg)
 		return m, cmd
+
+	case ViewReader:
+		if m.readerModel != nil {
+			updated, cmd := m.readerModel.Update(msg)
+			m.readerModel = &updated
+			return m, cmd
+		}
 	}
 
 	return m, nil
@@ -166,6 +197,12 @@ func (m AppModel) View() string {
 		content = m.renderHomeView()
 	case ViewLibrary:
 		content = m.libraryModel.View()
+	case ViewReader:
+		if m.readerModel != nil {
+			content = m.readerModel.View()
+		} else {
+			content = m.renderPlaceholderView("Reader", "No manga loaded")
+		}
 	case ViewHistory:
 		content = m.renderPlaceholderView("Reading History", "📖 Your reading history will appear here")
 	case ViewBrowse:
@@ -270,4 +307,12 @@ func (m AppModel) renderStatusBar() string {
 	help := "Press ? for help"
 
 	return GetStatusBarText(viewName, dimensions, help)
+}
+
+// Messages
+
+// OpenReaderMsg is sent when we want to open the reader
+type OpenReaderMsg struct {
+	Manga   *source.Manga
+	Chapter *source.Chapter
 }
