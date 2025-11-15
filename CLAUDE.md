@@ -83,8 +83,11 @@ Miryokusha/
 │   │   │   └── view.go     # Update history
 │   │   └── settings/       # Settings view
 │   └── storage/            # Local data persistence
-│       ├── cache.go
-│       └── history.go
+│       ├── cache.go        # API response caching
+│       ├── history.go      # Reading history tracking
+│       ├── progress.go     # Reading progress (page positions)
+│       ├── bookmarks.go    # Chapter bookmarks
+│       └── stats.go        # Reading statistics
 ├── pkg/                    # Public API (if needed)
 ├── test/                   # Integration tests
 ├── docs/                   # Documentation
@@ -223,11 +226,13 @@ func (m Model) View() string
 **View Routing**:
 - **Library** - Main view with manga organized by categories
 - **Updates** - Recent chapter updates across all manga
+- **History** - Reading history and continue reading
 - **Browse** - Discover manga from sources (popular, latest, search)
 - **Downloads** - Manage downloaded chapters and queue
 - **Reader** - Reading view with multiple modes (single, double, webtoon)
 - **Extensions** - Browse and install extensions from Suwayomi
 - **Tracking** - Sync with MyAnimeList, AniList, Kitsu
+- **Statistics** - Reading stats, streaks, and analytics
 - **Categories** - Organize manga into collections
 - **Settings** - App preferences and configuration
 - **Search** - Global search across all sources or current source
@@ -622,18 +627,259 @@ func (lu *LibraryUpdater) ScheduleUpdates(interval time.Duration) error
 - Scheduled auto-backup
 - Cloud storage sync (optional, via external tools)
 
-### 12. Migration Tools
+### 12. Local Reading History & Progress Tracking
+
+**Track reading data locally for offline access and privacy:**
+
+**Why Local Tracking?**
+- Works offline (when Suwayomi server is unavailable)
+- Faster access (no network latency)
+- Privacy (keep reading history local)
+- Redundancy (backup for server data)
+- Cross-device sync preparation (future feature)
+
+**Features**:
+- **Reading History**: Track which chapters were read and when
+- **Reading Progress**: Save page position in each chapter
+- **Bookmarks**: Mark specific pages in chapters
+- **Recently Read**: Quick access to recently viewed manga
+- **Reading Statistics**: Time spent reading, chapters completed, etc.
+- **Continue Reading**: Resume from last page automatically
+
+**Implementation Pattern**:
+```go
+// internal/storage/history.go
+type ReadingHistory struct {
+    db *sql.DB  // SQLite database
+}
+
+type HistoryEntry struct {
+    MangaID     string
+    MangaTitle  string
+    ChapterID   string
+    ChapterNum  float64
+    LastRead    time.Time
+    TimesRead   int
+}
+
+func (rh *ReadingHistory) RecordRead(mangaID, chapterID string) error
+func (rh *ReadingHistory) GetMangaHistory(mangaID string) ([]HistoryEntry, error)
+func (rh *ReadingHistory) GetRecentlyRead(limit int) ([]HistoryEntry, error)
+func (rh *ReadingHistory) Clear(before time.Time) error
+```
+
+```go
+// internal/storage/progress.go
+type ReadingProgress struct {
+    db *sql.DB
+}
+
+type ProgressEntry struct {
+    ChapterID   string
+    PageNumber  int
+    TotalPages  int
+    UpdatedAt   time.Time
+    Completed   bool
+}
+
+func (rp *ReadingProgress) SaveProgress(chapterID string, page int) error
+func (rp *ReadingProgress) GetProgress(chapterID string) (*ProgressEntry, error)
+func (rp *ReadingProgress) MarkComplete(chapterID string) error
+func (rp *ReadingProgress) GetIncomplete() ([]ProgressEntry, error)
+```
+
+```go
+// internal/storage/bookmarks.go
+type BookmarkManager struct {
+    db *sql.DB
+}
+
+type Bookmark struct {
+    ID          int
+    MangaID     string
+    ChapterID   string
+    PageNumber  int
+    Note        string
+    CreatedAt   time.Time
+}
+
+func (bm *BookmarkManager) Add(mangaID, chapterID string, page int, note string) error
+func (bm *BookmarkManager) List(mangaID string) ([]Bookmark, error)
+func (bm *BookmarkManager) Delete(id int) error
+```
+
+```go
+// internal/storage/stats.go
+type ReadingStats struct {
+    db *sql.DB
+}
+
+type Statistics struct {
+    TotalMangaRead      int
+    TotalChaptersRead   int
+    TotalPagesRead      int64
+    TimeSpentReading    time.Duration
+    AveragePagesPerDay  float64
+    CurrentStreak       int  // Days with reading activity
+    LongestStreak       int
+    FavoriteManga       []MangaStats
+}
+
+type MangaStats struct {
+    MangaID        string
+    MangaTitle     string
+    ChaptersRead   int
+    TimeSpent      time.Duration
+    LastRead       time.Time
+}
+
+func (rs *ReadingStats) RecordSession(mangaID string, duration time.Duration, pages int) error
+func (rs *ReadingStats) GetOverallStats() (*Statistics, error)
+func (rs *ReadingStats) GetMangaStats(mangaID string) (*MangaStats, error)
+func (rs *ReadingStats) GetReadingStreak() (current, longest int, error)
+```
+
+**Storage Backend**:
+- Use SQLite for local database (`~/.local/share/miryokusha/miryokusha.db`)
+- Schema versioning for migrations
+- Periodic cleanup of old data
+- Export/import for backup
+
+**Database Schema**:
+```sql
+CREATE TABLE reading_history (
+    manga_id TEXT NOT NULL,
+    manga_title TEXT NOT NULL,
+    chapter_id TEXT NOT NULL,
+    chapter_number REAL,
+    last_read TIMESTAMP NOT NULL,
+    times_read INTEGER DEFAULT 1,
+    PRIMARY KEY (manga_id, chapter_id)
+);
+
+CREATE TABLE reading_progress (
+    chapter_id TEXT PRIMARY KEY,
+    page_number INTEGER NOT NULL,
+    total_pages INTEGER NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    completed BOOLEAN DEFAULT 0
+);
+
+CREATE TABLE bookmarks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    manga_id TEXT NOT NULL,
+    chapter_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE reading_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    manga_id TEXT NOT NULL,
+    chapter_id TEXT,
+    started_at TIMESTAMP NOT NULL,
+    ended_at TIMESTAMP,
+    pages_read INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_history_manga ON reading_history(manga_id);
+CREATE INDEX idx_history_date ON reading_history(last_read);
+CREATE INDEX idx_bookmarks_manga ON bookmarks(manga_id);
+CREATE INDEX idx_sessions_manga ON reading_sessions(manga_id);
+```
+
+**UI Features**:
+
+**History View**:
+```
+┌─ Reading History ─────────────────────────────────────────────────┐
+│                                                                    │
+│ Today                                                              │
+│ ├─ One Piece - Ch. 1089                          14:32  (12 min)  │
+│ ├─ Naruto - Ch. 700                              13:15  (8 min)   │
+│ └─ Bleach - Ch. 686                              11:42  (15 min)  │
+│                                                                    │
+│ Yesterday                                                          │
+│ ├─ Attack on Titan - Ch. 139                     18:20  (20 min)  │
+│ └─ My Hero Academia - Ch. 400                    16:45  (10 min)  │
+│                                                                    │
+│ This Week                                                          │
+│ ├─ Jujutsu Kaisen - Ch. 245                  Nov 13  (25 min)     │
+│                                                                    │
+│ [c]lear old  [s]earch  [e]xport  Total: 2.5 hours this week       │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Continue Reading**:
+```
+┌─ Continue Reading ────────────────────────────────────────────────┐
+│                                                                    │
+│ ┌──────────┐  One Piece - Chapter 1089                            │
+│ │  [IMG]   │  Page 15/20 • Last read: 2 hours ago                 │
+│ └──────────┘  [Resume]                                             │
+│                                                                    │
+│ ┌──────────┐  Naruto - Chapter 700                                │
+│ │  [IMG]   │  Page 8/18 • Last read: 5 hours ago                  │
+│ └──────────┘  [Resume]                                             │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Statistics View**:
+```
+┌─ Reading Statistics ──────────────────────────────────────────────┐
+│                                                                    │
+│ Overall                                                            │
+│ ├─ Total Manga Read: 127                                          │
+│ ├─ Total Chapters Read: 3,421                                     │
+│ ├─ Total Pages Read: 68,420                                       │
+│ ├─ Time Spent Reading: 142 hours 35 min                           │
+│ └─ Average Pages/Day: 187                                         │
+│                                                                    │
+│ Streaks                                                            │
+│ ├─ Current Streak: 🔥 15 days                                     │
+│ └─ Longest Streak: 🏆 42 days                                     │
+│                                                                    │
+│ Top Manga (by time)                                               │
+│ 1. One Piece          25h 30m    342 chapters                     │
+│ 2. Naruto             18h 15m    255 chapters                     │
+│ 3. Bleach             14h 42m    198 chapters                     │
+│                                                                    │
+│ [d]etails  [e]xport  [r]eset                                      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Sync Strategy**:
+- **Suwayomi Server**: Primary source of truth for library data
+- **Local Storage**: Track reading sessions, detailed progress, bookmarks
+- **Hybrid Approach**:
+  - When online: Update both server and local
+  - When offline: Update local only, sync when reconnected
+  - Conflict resolution: Server data takes precedence for chapter read status
+
+**Privacy Options**:
+```yaml
+privacy:
+  local_history_only: false  # Don't sync history to server
+  auto_clear_history: false  # Auto-delete history older than X days
+  history_retention_days: 365
+  track_reading_time: true
+  anonymous_stats: false  # Don't include personal data in stats
+```
+
+### 13. Migration Tools
 
 **Move manga between sources:**
 
 **Features**:
 - Migrate manga from one source to another
-- Preserve reading history
+- Preserve reading history (including local tracking data)
 - Preserve categories
 - Batch migration
 - Duplicate detection
 
-### 13. Extension Management System
+### 14. Extension Management System
 
 **Extension management is a core feature for Suwayomi integration:**
 
@@ -733,7 +979,7 @@ func (m BrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 - View source code/repository (if available)
 - Browse manga from this extension
 
-### 14. Local File Support
+### 15. Local File Support
 
 **Two Primary Strategies for Local File Reading:**
 
@@ -839,7 +1085,7 @@ func (s *Scanner) Scan() ([]*LocalManga, error) {
 - Extract cover images for thumbnails
 - Remember reading position
 
-### 15. Unified Source Interface
+### 16. Unified Source Interface
 
 **Abstract sources for flexibility**:
 
@@ -872,7 +1118,7 @@ type LocalSource struct { /* ... */ }
 - Consistent reading experience
 - Easy to add new source types (Komga, Kavita, etc.)
 
-### 16. Error Handling Strategy
+### 17. Error Handling Strategy
 
 **Graceful Degradation**:
 - Network errors → Show connection status indicator
@@ -1050,17 +1296,28 @@ git push -u origin feature/server-config
    - `o` - Open local file
    - `r` - Refresh/rescan current source
    - `c` - Manage categories
+   - `h` - View reading history
+   - `H` - View reading statistics
    - `F` - Filter library
    - `S` - Sort library
    - `u` - Check for updates
 
    **Manga Actions**:
    - `m` - Mark as read/unread
-   - `b` - Bookmark chapter
+   - `b` - Bookmark current page
+   - `B` - View all bookmarks
    - `D` - Download chapter(s)
    - `t` - Track manga (bind to MAL/AniList)
    - `C` - Change category
    - `x` - Select multiple (bulk actions)
+
+   **Reader**:
+   - `Space` - Next page
+   - `Shift+Space` - Previous page
+   - `←→` - Navigate pages
+   - `b` - Add bookmark at current page
+   - `g` - Go to page number
+   - `[` / `]` - Previous/next chapter
 
    **Extensions** (in extension views):
    - `e` - Browse available extensions
@@ -1096,6 +1353,9 @@ require (
   - `archive/zip` (built-in) - CBZ files
   - `github.com/nwaples/rardecode` - CBR files
   - `github.com/gen2brain/go-fitz` - PDF files
+- **Database**:
+  - `modernc.org/sqlite` or `github.com/mattn/go-sqlite3` - Local storage
+  - `database/sql` (built-in) - Database interface
 - **File Watching**: `github.com/fsnotify/fsnotify` (monitor directories)
 - **XML Parsing**: `encoding/xml` (built-in) - ComicInfo.xml metadata
 - **Logging**: `github.com/rs/zerolog` or `log/slog` (Go 1.21+)
@@ -1367,19 +1627,22 @@ For contributors and AI assistants:
 **Priority Next Steps**:
 1. Initialize Go modules
 2. Set up basic TUI framework
-3. Implement source abstraction layer
-4. Implement server configuration
-5. Implement basic library view with categories
-6. Implement manga reader with multiple modes
-7. Implement extension browser and management
-8. Implement download management
-9. Implement library updates
-10. Implement tracking integration
+3. Implement local storage (SQLite for history/progress/bookmarks)
+4. Implement source abstraction layer
+5. Implement server configuration
+6. Implement basic library view with categories
+7. Implement manga reader with multiple modes and progress tracking
+8. Implement reading history and continue reading
+9. Implement extension browser and management
+10. Implement download management
+11. Implement library updates
+12. Implement tracking integration
 
 **Secondary Features** (implement after core functionality):
-11. Local file reading (CBZ/CBR/PDF)
-12. Directory scanning
-13. Browse/discover views
-14. Backup & restore
-15. Migration tools
-16. Advanced filters and bulk operations
+13. Reading statistics and analytics
+14. Local file reading (CBZ/CBR/PDF)
+15. Directory scanning
+16. Browse/discover views
+17. Backup & restore (including local tracking data)
+18. Migration tools (preserve local history)
+19. Advanced filters and bulk operations
