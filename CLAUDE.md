@@ -2,15 +2,23 @@
 
 ## Project Overview
 
-**Miryokusha** is a Terminal User Interface (TUI) client for Suwayomi/Tachiyomi servers, built using Go and the Charm framework. The project provides a beautiful, keyboard-driven interface for managing and reading manga from Suwayomi servers.
+**Miryokusha** is a Terminal User Interface (TUI) client for Suwayomi/Tachiyomi servers, built using Go and the Charm framework. The project provides a beautiful, keyboard-driven interface for managing and reading manga from both Suwayomi servers and local files.
 
 ### Project Metadata
 - **Language**: Go (Golang)
 - **License**: GNU General Public License v3 (GPLv3)
 - **UI Framework**: Charm (Bubble Tea, Lip Gloss, Bubbles)
-- **Backend**: Suwayomi Server API
+- **Backend**: Suwayomi Server API + Local File Support
 - **Repository**: github.com/Justice-Caban/Miryokusha
 - **Stage**: Early development / Initial setup
+
+### Supported Sources
+1. **Suwayomi Server** - Remote manga library via HTTP API
+2. **Local Files** - Direct reading from filesystem:
+   - CBZ (Comic Book ZIP) archives
+   - CBR (Comic Book RAR) archives
+   - PDF files
+   - Image directories (JPG, PNG, WEBP)
 
 ## Repository Structure
 
@@ -34,10 +42,18 @@ Miryokusha/
 │   │   ├── client.go
 │   │   ├── types.go
 │   │   └── endpoints.go
+│   ├── local/              # Local file handling
+│   │   ├── scanner.go      # Directory scanner
+│   │   ├── reader.go       # Archive reader (CBZ/CBR/PDF)
+│   │   ├── types.go        # Local manga types
+│   │   └── watcher.go      # File system watcher (optional)
+│   ├── source/             # Unified source interface
+│   │   ├── interface.go    # Source abstraction
+│   │   └── manager.go      # Source manager
 │   ├── tui/                # TUI components
 │   │   ├── app.go          # Main application model
 │   │   ├── styles.go       # Lip Gloss styles
-│   │   ├── server/         # Server selection view
+│   │   ├── source/         # Source selection view
 │   │   ├── library/        # Manga library view
 │   │   ├── reader/         # Manga reader view
 │   │   └── settings/       # Settings view
@@ -77,11 +93,23 @@ servers:
       username: user
       password: encrypted_pass
 
+local_sources:
+  - name: "Manga Collection"
+    path: "~/Manga"
+    recursive: true
+    watch: false  # File system watching for new files
+  - name: "Downloads"
+    path: "~/Downloads/Manga"
+    recursive: false
+    file_types: [".cbz", ".cbr", ".pdf"]
+
 preferences:
   theme: dark
-  default_server: 0
+  default_source: "server:0"  # or "local:0"
   cache_size_mb: 500
   auto_mark_read: true
+  image_fit: "width"  # width, height, both
+  double_page_mode: false
 ```
 
 **Implementation Guidelines**:
@@ -97,12 +125,14 @@ preferences:
 
 ```go
 type Model struct {
-    currentView string
-    serverList  ServerListModel
-    library     LibraryModel
-    reader      ReaderModel
-    config      *config.Config
-    suwayomi    *suwayomi.Client
+    currentView   string
+    sourceList    SourceListModel
+    library       LibraryModel
+    reader        ReaderModel
+    fileBrowser   FileBrowserModel
+    config        *config.Config
+    currentSource source.Source  // Can be Suwayomi or Local
+    sourceManager *source.Manager
 }
 
 func (m Model) Init() tea.Cmd
@@ -111,11 +141,12 @@ func (m Model) View() string
 ```
 
 **View Routing**:
-- Server selection (on first run or server switch)
-- Library browser (main view)
-- Manga reader (reading view)
+- Source selection (server/local on first run or source switch)
+- Library browser (main view - shows manga from current source)
+- Manga reader (reading view - works with any source)
 - Settings/preferences
-- Search interface
+- Search interface (searches current source)
+- File browser (for ad-hoc local file selection)
 
 ### 3. Suwayomi API Client
 
@@ -135,13 +166,156 @@ GET  /api/v1/manga/{id}/chapters  # Get chapters
 GET  /api/v1/chapter/{id}/page/{page}  # Get page image
 ```
 
-### 4. Error Handling Strategy
+### 4. Local File Support
+
+**Two Primary Strategies for Local File Reading:**
+
+#### Strategy 1: CLI File Arguments
+Users can pass files directly via command-line arguments:
+
+```bash
+# Read a single file
+miryokusha read ~/Manga/OnePiece.cbz
+
+# Read multiple files
+miryokusha read ~/Manga/*.cbz
+
+# Read from specific chapter
+miryokusha read ~/Manga/OnePiece.cbz --chapter 5
+
+# Read from specific page
+miryokusha read ~/Manga/OnePiece.cbz --page 15
+```
+
+**Implementation Pattern**:
+```go
+// cmd/miryokusha/main.go
+func main() {
+    if len(os.Args) > 2 && os.Args[1] == "read" {
+        filePath := os.Args[2]
+        reader, err := local.NewReader(filePath)
+        if err != nil {
+            log.Fatal(err)
+        }
+        // Launch TUI with this specific file
+        runReaderMode(reader)
+    } else {
+        // Launch normal TUI (library browser)
+        runNormalMode()
+    }
+}
+```
+
+#### Strategy 2: Directory Scanning
+Scan configured directories for manga files:
+
+```go
+// internal/local/scanner.go
+type Scanner struct {
+    basePath   string
+    recursive  bool
+    fileTypes  []string
+}
+
+func (s *Scanner) Scan() ([]*LocalManga, error) {
+    var manga []*LocalManga
+
+    err := filepath.Walk(s.basePath, func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+
+        // Skip directories unless recursive
+        if info.IsDir() && !s.recursive {
+            return filepath.SkipDir
+        }
+
+        // Check file extension
+        ext := filepath.Ext(path)
+        if s.isSupported(ext) {
+            m, err := s.parseFile(path, info)
+            if err == nil {
+                manga = append(manga, m)
+            }
+        }
+
+        return nil
+    })
+
+    return manga, err
+}
+```
+
+**Supported Archive Formats**:
+- **CBZ**: ZIP archive containing images (use `archive/zip`)
+- **CBR**: RAR archive containing images (use `github.com/nwaples/rardecode`)
+- **PDF**: PDF files with images (use `github.com/gen2brain/go-fitz`)
+- **Directories**: Folders containing image files directly
+
+**File Organization Detection**:
+```
+~/Manga/
+├── OnePiece/
+│   ├── Vol 1/
+│   │   ├── 001.jpg
+│   │   ├── 002.jpg
+│   │   └── ...
+│   └── Vol 2/
+│       └── ...
+├── Naruto.cbz
+└── Bleach.pdf
+```
+
+**Metadata Extraction**:
+- Parse filenames for manga title, volume, chapter
+- Support ComicInfo.xml (standard comic metadata)
+- Extract cover images for thumbnails
+- Remember reading position
+
+### 5. Unified Source Interface
+
+**Abstract sources for flexibility**:
+
+```go
+// internal/source/interface.go
+type Source interface {
+    Type() SourceType  // "suwayomi" or "local"
+    Name() string
+    GetLibrary() ([]*Manga, error)
+    GetManga(id string) (*Manga, error)
+    GetChapters(mangaID string) ([]*Chapter, error)
+    GetPage(chapterID string, page int) ([]byte, error)
+}
+
+type SourceType string
+
+const (
+    SourceTypeSuwayomi SourceType = "suwayomi"
+    SourceTypeLocal    SourceType = "local"
+)
+
+// Implementations
+type SuwayomiSource struct { /* ... */ }
+type LocalSource struct { /* ... */ }
+```
+
+**Benefits**:
+- Seamless switching between sources in TUI
+- Unified interface for library browsing
+- Consistent reading experience
+- Easy to add new source types (Komga, Kavita, etc.)
+
+### 6. Error Handling Strategy
 
 **Graceful Degradation**:
 - Network errors → Show connection status indicator
 - Missing config → Launch first-run setup wizard
 - API errors → Display user-friendly error messages
 - Cache miss → Fall back to network fetch
+- Corrupted archive → Show error, skip to next file
+- Unsupported format → Warn user, suggest conversion
+- Missing permissions → Clear error about file access
+- Invalid path → Suggest path correction
 
 **User Experience**:
 - Never crash on network issues
@@ -165,9 +339,11 @@ go get github.com/charmbracelet/bubbles
 # Install other dependencies
 go get github.com/spf13/viper  # Config management
 go get github.com/go-resty/resty/v2  # HTTP client (optional)
+go get github.com/nwaples/rardecode  # RAR archive support
+go get github.com/gen2brain/go-fitz  # PDF support
 
 # Create basic structure
-mkdir -p cmd/miryokusha internal/{config,suwayomi,tui,storage}
+mkdir -p cmd/miryokusha internal/{config,suwayomi,local,source,tui,storage}
 
 # Build and run
 go build -o bin/miryokusha ./cmd/miryokusha
@@ -177,11 +353,20 @@ go build -o bin/miryokusha ./cmd/miryokusha
 ### Development Workflow
 
 ```bash
-# Run in development mode
+# Run in development mode (TUI library browser)
 go run ./cmd/miryokusha
 
 # Run with specific server
 go run ./cmd/miryokusha --server http://localhost:4567
+
+# Read local file directly
+go run ./cmd/miryokusha read ~/Manga/OnePiece.cbz
+
+# Read from local directory
+go run ./cmd/miryokusha --local ~/Manga
+
+# Scan and list local manga
+go run ./cmd/miryokusha scan ~/Manga --recursive
 
 # Build optimized binary
 go build -ldflags="-s -w" -o bin/miryokusha ./cmd/miryokusha
@@ -283,6 +468,9 @@ git push -u origin feature/server-config
    - `Esc` - Go back
    - `/` - Search
    - `Tab` - Switch panels
+   - `s` - Switch source (server/local)
+   - `o` - Open local file
+   - `r` - Refresh/rescan current source
 
 3. **Visual Design**:
    - Use Lip Gloss for all styling
@@ -305,8 +493,15 @@ require (
 ### Recommended Additional Dependencies
 - **HTTP Client**: `github.com/go-resty/resty/v2` or standard `net/http`
 - **Image Processing**: `github.com/disintegration/imaging` (for manga pages)
+- **Archive Support**:
+  - `archive/zip` (built-in) - CBZ files
+  - `github.com/nwaples/rardecode` - CBR files
+  - `github.com/gen2brain/go-fitz` - PDF files
+- **File Watching**: `github.com/fsnotify/fsnotify` (monitor directories)
+- **XML Parsing**: `encoding/xml` (built-in) - ComicInfo.xml metadata
 - **Logging**: `github.com/rs/zerolog` or `log/slog` (Go 1.21+)
 - **Testing**: `github.com/stretchr/testify`
+- **CLI Framework**: `github.com/spf13/cobra` (for command-line arguments)
 
 ### Dependency Update Strategy
 ```bash
@@ -369,11 +564,13 @@ func TestAppModel(t *testing.T) {
    - Add validation for new config fields
    - Handle backward compatibility
 
-3. **API Client Changes**:
+3. **Source Implementation Changes**:
    - Document Suwayomi API endpoints in code comments
-   - Add integration tests for new endpoints
+   - Add integration tests for new endpoints/sources
    - Handle API versioning gracefully
    - Cache responses when appropriate
+   - Test local file reading with various archive formats
+   - Ensure consistent behavior across source types
 
 4. **TUI Development**:
    - Test TUI changes in terminal (may need user verification)
@@ -403,13 +600,22 @@ func TestAppModel(t *testing.T) {
 5. Add styles to `internal/tui/styles.go`
 6. Update help text
 
-**Adding a New API Endpoint**:
-1. Define method in `internal/suwayomi/client.go`
-2. Add response types in `internal/suwayomi/types.go`
-3. Document endpoint and parameters
-4. Add error handling
-5. Add integration test
-6. Update client cache if needed
+**Adding a New Source Type**:
+1. Implement `source.Source` interface in new package
+2. Add source types in `internal/source/interface.go`
+3. Document source capabilities and limitations
+4. Add error handling for source-specific errors
+5. Add integration test with sample data
+6. Update source manager to support new type
+7. Update TUI to handle source-specific features
+
+**Adding Local File Format Support**:
+1. Add format detection in `internal/local/reader.go`
+2. Implement reader for the format (e.g., EPUB, CBT)
+3. Add format to config `file_types` list
+4. Add tests with sample files
+5. Update documentation with supported formats
+6. Handle format-specific edge cases
 
 **Updating Configuration**:
 1. Update struct in `internal/config/config.go`
@@ -424,9 +630,13 @@ Before implementing major features, clarify:
 - Server authentication requirements?
 - Offline reading support needed?
 - Manga download/caching strategy?
-- Multi-server switching behavior?
+- Multi-server/source switching behavior?
 - Keyboard shortcut preferences?
 - Theme customization level?
+- Local file organization expectations?
+- Archive format priority (CBZ vs CBR vs PDF)?
+- File system watching (auto-detect new files)?
+- Metadata handling strategy (ComicInfo.xml, filename parsing)?
 
 ## Build and Release
 
@@ -481,6 +691,21 @@ os.MkdirAll(configDir, 0755)
 - Ensure server is running
 - Check firewall rules
 
+**Local file reading fails**:
+- Check file permissions (readable by user)
+- Verify file is not corrupted (try unzipping manually)
+- Ensure path exists and is correct
+- Check supported format (.cbz, .cbr, .pdf)
+- For CBR: ensure rardecode is installed
+- For PDF: ensure go-fitz is installed
+
+**Directory scanning issues**:
+- Verify directory path exists
+- Check recursive flag if files in subdirectories
+- Ensure read permissions on directory
+- Check file type filters in config
+- Look for hidden files (start with .)
+
 **TUI rendering issues**:
 - Ensure terminal supports ANSI colors
 - Check terminal size (minimum 80x24)
@@ -508,4 +733,11 @@ For contributors and AI assistants:
 
 **Last Updated**: 2025-11-15
 **Project Status**: Initial setup phase
-**Next Steps**: Initialize Go modules, set up basic TUI framework, implement server configuration
+**Next Steps**:
+1. Initialize Go modules
+2. Set up basic TUI framework
+3. Implement source abstraction layer
+4. Implement server configuration
+5. Implement local file reading (CBZ/CBR/PDF)
+6. Implement directory scanning
+7. Add CLI argument parsing
