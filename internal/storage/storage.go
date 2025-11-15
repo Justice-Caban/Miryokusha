@@ -6,12 +6,13 @@ import (
 
 // Storage provides a unified interface to all storage managers
 type Storage struct {
-	db         *DB
-	History    *HistoryManager
-	Progress   *ProgressManager
-	Bookmarks  *BookmarkManager
-	Stats      *StatsManager
-	Categories *CategoryManager
+	db            *DB
+	History       *HistoryManager
+	Progress      *ProgressManager
+	Bookmarks     *BookmarkManager
+	Stats         *StatsManager
+	Categories    *CategoryManager
+	UpdateTracking *UpdateTrackingManager
 }
 
 // NewStorage creates a new storage instance with all managers
@@ -22,12 +23,13 @@ func NewStorage() (*Storage, error) {
 	}
 
 	storage := &Storage{
-		db:         db,
-		History:    NewHistoryManager(db),
-		Progress:   NewProgressManager(db),
-		Bookmarks:  NewBookmarkManager(db),
-		Stats:      NewStatsManager(db),
-		Categories: NewCategoryManager(db),
+		db:             db,
+		History:        NewHistoryManager(db),
+		Progress:       NewProgressManager(db),
+		Bookmarks:      NewBookmarkManager(db),
+		Stats:          NewStatsManager(db),
+		Categories:     NewCategoryManager(db),
+		UpdateTracking: NewUpdateTrackingManager(db),
 	}
 
 	// Initialize default categories if needed

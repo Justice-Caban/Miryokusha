@@ -97,7 +97,7 @@ func (db *DB) initSchema() error {
 	}
 
 	// If schema is already at latest version, skip
-	const latestVersion = 1
+	const latestVersion = 2
 	if currentVersion >= latestVersion {
 		return nil
 	}
@@ -110,6 +110,18 @@ func (db *DB) initSchema() error {
 
 		// Record schema version
 		_, err = db.conn.Exec("INSERT INTO schema_version (version) VALUES (?)", 1)
+		if err != nil {
+			return fmt.Errorf("failed to record schema version: %w", err)
+		}
+	}
+
+	if currentVersion < 2 {
+		if err := db.applySchemaV2(); err != nil {
+			return fmt.Errorf("failed to apply schema v2: %w", err)
+		}
+
+		// Record schema version
+		_, err = db.conn.Exec("INSERT INTO schema_version (version) VALUES (?)", 2)
 		if err != nil {
 			return fmt.Errorf("failed to record schema version: %w", err)
 		}
@@ -214,6 +226,34 @@ func (db *DB) applySchemaV1() error {
 	CREATE INDEX IF NOT EXISTS idx_manga_categories_manga ON manga_categories(manga_id);
 	CREATE INDEX IF NOT EXISTS idx_manga_categories_category ON manga_categories(category_id);
 	CREATE INDEX IF NOT EXISTS idx_categories_sort ON categories(sort_order);
+	`
+
+	_, err := db.conn.Exec(schema)
+	return err
+}
+
+// applySchemaV2 adds smart update tracking (version 2)
+func (db *DB) applySchemaV2() error {
+	schema := `
+	-- Manga update tracking for smart updates (Mihon-style)
+	CREATE TABLE IF NOT EXISTS manga_update_tracking (
+		manga_id TEXT PRIMARY KEY,
+		last_check TIMESTAMP NOT NULL,
+		last_chapter_found TIMESTAMP,
+		chapter_count INTEGER DEFAULT 0,
+		avg_update_interval_days REAL,
+		fetch_count INTEGER DEFAULT 1,
+		consecutive_failures INTEGER DEFAULT 0,
+		is_completed BOOLEAN DEFAULT FALSE,
+		is_ongoing BOOLEAN DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	-- Index for smart update queries
+	CREATE INDEX IF NOT EXISTS idx_update_tracking_last_check ON manga_update_tracking(last_check);
+	CREATE INDEX IF NOT EXISTS idx_update_tracking_completed ON manga_update_tracking(is_completed);
+	CREATE INDEX IF NOT EXISTS idx_update_tracking_ongoing ON manga_update_tracking(is_ongoing);
 	`
 
 	_, err := db.conn.Exec(schema)
