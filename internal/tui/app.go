@@ -6,6 +6,7 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/config"
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/reader"
 	tea "github.com/charmbracelet/bubbletea"
@@ -41,6 +42,7 @@ type AppModel struct {
 
 	// View models
 	libraryModel library.Model
+	historyModel history.Model
 	readerModel  *reader.Model
 }
 
@@ -66,12 +68,16 @@ func NewAppModel() AppModel {
 	// Initialize library model
 	libModel := library.NewModel(sm, st)
 
+	// Initialize history model
+	histModel := history.NewModel(sm, st)
+
 	return AppModel{
 		currentView:   ViewHome,
 		config:        cfg,
 		sourceManager: sm,
 		storage:       st,
 		libraryModel:  libModel,
+		historyModel:  histModel,
 	}
 }
 
@@ -88,6 +94,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OpenReaderMsg:
 		// Launch reader with manga and chapter
 		readerModel := reader.NewModel(msg.Manga, msg.Chapter, m.sourceManager, m.storage)
+		m.readerModel = &readerModel
+		m.currentView = ViewReader
+		return m, m.readerModel.Init()
+
+	case history.OpenChapterMsg:
+		// Launch reader from history by loading manga and chapter from source
+		// For now, create a minimal manga/chapter to launch reader
+		// TODO: Fetch full manga/chapter details from source
+		manga := &source.Manga{
+			ID:         msg.MangaID,
+			SourceType: source.SourceTypeSuwayomi, // TODO: Get from history entry
+		}
+		chapter := &source.Chapter{
+			ID:      msg.ChapterID,
+			MangaID: msg.MangaID,
+		}
+		readerModel := reader.NewModel(manga, chapter, m.sourceManager, m.storage)
 		m.readerModel = &readerModel
 		m.currentView = ViewReader
 		return m, m.readerModel.Init()
@@ -141,6 +164,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "3":
 			if m.currentView == ViewHome {
 				m.currentView = ViewHistory
+				m.historyModel, cmd = m.historyModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+				return m, cmd
 			}
 		case "4":
 			if m.currentView == ViewHome {
@@ -170,6 +195,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.currentView {
 	case ViewLibrary:
 		m.libraryModel, cmd = m.libraryModel.Update(msg)
+		return m, cmd
+
+	case ViewHistory:
+		m.historyModel, cmd = m.historyModel.Update(msg)
 		return m, cmd
 
 	case ViewReader:
@@ -204,7 +233,7 @@ func (m AppModel) View() string {
 			content = m.renderPlaceholderView("Reader", "No manga loaded")
 		}
 	case ViewHistory:
-		content = m.renderPlaceholderView("Reading History", "📖 Your reading history will appear here")
+		content = m.historyModel.View()
 	case ViewBrowse:
 		content = m.renderPlaceholderView("Browse", "🔍 Browse manga sources here")
 	case ViewDownloads:
