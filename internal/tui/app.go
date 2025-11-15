@@ -9,6 +9,7 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
 	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/categories"
 	tuiDownloads "github.com/Justice-Caban/Miryokusha/internal/tui/downloads"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/extensions"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
@@ -31,6 +32,7 @@ const (
 	ViewDownloads  ViewType = "downloads"
 	ViewExtensions ViewType = "extensions"
 	ViewSettings   ViewType = "settings"
+	ViewCategories ViewType = "categories"
 )
 
 // AppModel is the root model for the entire TUI application
@@ -54,6 +56,7 @@ type AppModel struct {
 	extensionsModel  extensions.Model
 	downloadsModel   tuiDownloads.Model
 	settingsModel    settings.Model
+	categoriesModel  categories.Model
 	readerModel      *reader.Model
 
 	// Suwayomi client
@@ -122,6 +125,9 @@ func NewAppModel() AppModel {
 	// Initialize settings model
 	settingsModel := settings.NewModel(cfg, suwayomiClient, serverMgr)
 
+	// Initialize categories model
+	categoriesModel := categories.NewModel(st)
+
 	return AppModel{
 		currentView:      ViewHome,
 		config:           cfg,
@@ -135,6 +141,7 @@ func NewAppModel() AppModel {
 		extensionsModel:  extModel,
 		downloadsModel:   dlModel,
 		settingsModel:    settingsModel,
+		categoriesModel:  categoriesModel,
 	}
 }
 
@@ -246,6 +253,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.settingsModel, cmd = m.settingsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 				return m, cmd
 			}
+		case "8":
+			if m.currentView == ViewHome {
+				m.currentView = ViewCategories
+				m.categoriesModel, cmd = m.categoriesModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+				return m, cmd
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -274,6 +287,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ViewSettings:
 		m.settingsModel, cmd = m.settingsModel.Update(msg)
+		return m, cmd
+
+	case ViewCategories:
+		m.categoriesModel, cmd = m.categoriesModel.Update(msg)
 		return m, cmd
 
 	case ViewReader:
@@ -317,6 +334,8 @@ func (m AppModel) View() string {
 		content = m.extensionsModel.View()
 	case ViewSettings:
 		content = m.settingsModel.View()
+	case ViewCategories:
+		content = m.categoriesModel.View()
 	default:
 		content = m.renderHomeView()
 	}
@@ -350,6 +369,7 @@ Navigation:
   5 - Downloads
   6 - Extensions
   7 - Settings
+  8 - Categories
 
   q - Quit
 `)

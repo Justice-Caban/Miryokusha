@@ -130,6 +130,26 @@ func (db *DB) initSchema() error {
 		last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
+	-- Categories table
+	CREATE TABLE IF NOT EXISTS categories (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		is_default BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	-- Manga-Category relationship table (many-to-many)
+	CREATE TABLE IF NOT EXISTS manga_categories (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		manga_id TEXT NOT NULL,
+		category_id INTEGER NOT NULL,
+		added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+		UNIQUE(manga_id, category_id)
+	);
+
 	-- Indices for better performance
 	CREATE INDEX IF NOT EXISTS idx_history_manga ON reading_history(manga_id);
 	CREATE INDEX IF NOT EXISTS idx_history_read_at ON reading_history(read_at DESC);
@@ -137,6 +157,9 @@ func (db *DB) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_progress_last_read ON reading_progress(last_read_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_bookmarks_manga ON bookmarks(manga_id);
 	CREATE INDEX IF NOT EXISTS idx_sessions_manga ON reading_sessions(manga_id);
+	CREATE INDEX IF NOT EXISTS idx_manga_categories_manga ON manga_categories(manga_id);
+	CREATE INDEX IF NOT EXISTS idx_manga_categories_category ON manga_categories(category_id);
+	CREATE INDEX IF NOT EXISTS idx_categories_sort ON categories(sort_order);
 	`
 
 	_, err := db.conn.Exec(schema)

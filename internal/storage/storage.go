@@ -6,11 +6,12 @@ import (
 
 // Storage provides a unified interface to all storage managers
 type Storage struct {
-	db        *DB
-	History   *HistoryManager
-	Progress  *ProgressManager
-	Bookmarks *BookmarkManager
-	Stats     *StatsManager
+	db         *DB
+	History    *HistoryManager
+	Progress   *ProgressManager
+	Bookmarks  *BookmarkManager
+	Stats      *StatsManager
+	Categories *CategoryManager
 }
 
 // NewStorage creates a new storage instance with all managers
@@ -21,11 +22,17 @@ func NewStorage() (*Storage, error) {
 	}
 
 	storage := &Storage{
-		db:        db,
-		History:   NewHistoryManager(db),
-		Progress:  NewProgressManager(db),
-		Bookmarks: NewBookmarkManager(db),
-		Stats:     NewStatsManager(db),
+		db:         db,
+		History:    NewHistoryManager(db),
+		Progress:   NewProgressManager(db),
+		Bookmarks:  NewBookmarkManager(db),
+		Stats:      NewStatsManager(db),
+		Categories: NewCategoryManager(db),
+	}
+
+	// Initialize default categories if needed
+	if err := storage.Categories.InitializeDefaultCategories(); err != nil {
+		return nil, fmt.Errorf("failed to initialize default categories: %w", err)
 	}
 
 	return storage, nil
