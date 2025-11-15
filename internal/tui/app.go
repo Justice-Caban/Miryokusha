@@ -5,6 +5,7 @@ import (
 
 	"github.com/Justice-Caban/Miryokusha/internal/config"
 	"github.com/Justice-Caban/Miryokusha/internal/downloads"
+	"github.com/Justice-Caban/Miryokusha/internal/server"
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
 	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
@@ -45,6 +46,7 @@ type AppModel struct {
 	sourceManager   *source.SourceManager
 	storage         *storage.Storage
 	downloadManager *downloads.Manager
+	serverManager   *server.Manager
 
 	// View models
 	libraryModel     library.Model
@@ -100,8 +102,25 @@ func NewAppModel() AppModel {
 	// Initialize downloads model
 	dlModel := tuiDownloads.NewModel(downloadMgr)
 
+	// Initialize server manager if enabled
+	var serverMgr *server.Manager
+	if cfg.ServerManagement.Enabled {
+		serverConfig := &server.ManagerConfig{
+			ExecutablePath: cfg.ServerManagement.ExecutablePath,
+			Args:           cfg.ServerManagement.Args,
+			WorkDir:        cfg.ServerManagement.WorkDir,
+			MaxLogs:        1000,
+		}
+		serverMgr = server.NewManager(serverConfig)
+
+		// Auto-start if configured
+		if cfg.ServerManagement.AutoStart {
+			_ = serverMgr.Start()
+		}
+	}
+
 	// Initialize settings model
-	settingsModel := settings.NewModel(cfg, suwayomiClient)
+	settingsModel := settings.NewModel(cfg, suwayomiClient, serverMgr)
 
 	return AppModel{
 		currentView:      ViewHome,
@@ -109,6 +128,7 @@ func NewAppModel() AppModel {
 		sourceManager:    sm,
 		storage:          st,
 		downloadManager:  downloadMgr,
+		serverManager:    serverMgr,
 		suwayomiClient:   suwayomiClient,
 		libraryModel:     libModel,
 		historyModel:     histModel,

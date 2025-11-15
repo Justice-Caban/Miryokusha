@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Justice-Caban/Miryokusha/internal/config"
+	"github.com/Justice-Caban/Miryokusha/internal/server"
 	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -65,19 +66,35 @@ type Model struct {
 
 	config         *config.Config
 	suwayomiClient *suwayomi.Client
+	serverManager  *server.Manager
 
 	// Server health
 	serverInfo      *suwayomi.ServerInfo
 	checkingHealth  bool
 	lastHealthCheck time.Time
 	healthError     error
+
+	// View mode
+	viewMode ViewMode // "main", "logs"
+	logLines int      // Number of log lines to show
 }
 
+// ViewMode represents the current view mode
+type ViewMode string
+
+const (
+	ViewModeMain ViewMode = "main"
+	ViewModeLogs ViewMode = "logs"
+)
+
 // NewModel creates a new settings model
-func NewModel(cfg *config.Config, client *suwayomi.Client) Model {
+func NewModel(cfg *config.Config, client *suwayomi.Client, mgr *server.Manager) Model {
 	return Model{
 		config:         cfg,
 		suwayomiClient: client,
+		serverManager:  mgr,
+		viewMode:       ViewModeMain,
+		logLines:       20,
 	}
 }
 
@@ -107,6 +124,53 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.config = cfg
 			}
 			return m, nil
+
+		case "s", "S":
+			// Start server
+			if m.serverManager != nil && m.config.ServerManagement.Enabled {
+				if m.serverManager.GetStatus() == server.StatusStopped {
+					if err := m.serverManager.Start(); err != nil {
+						// Log error but continue
+					}
+				}
+			}
+			return m, nil
+
+		case "x", "X":
+			// Stop server
+			if m.serverManager != nil {
+				if m.serverManager.GetStatus() == server.StatusRunning {
+					if err := m.serverManager.Stop(); err != nil {
+						// Log error but continue
+					}
+				}
+			}
+			return m, nil
+
+		case "t", "T":
+			// Restart server
+			if m.serverManager != nil && m.config.ServerManagement.Enabled {
+				if err := m.serverManager.Restart(); err != nil {
+					// Log error but continue
+				}
+			}
+			return m, nil
+
+		case "l", "L":
+			// Toggle logs view
+			if m.viewMode == ViewModeMain {
+				m.viewMode = ViewModeLogs
+			} else {
+				m.viewMode = ViewModeMain
+			}
+			return m, nil
+
+		case "c", "C":
+			// Clear logs
+			if m.serverManager != nil {
+				m.serverManager.ClearLogs()
+			}
+			return m, nil
 		}
 
 	case healthCheckResultMsg:
@@ -128,16 +192,28 @@ func (m Model) View() string {
 	b.WriteString(titleStyle.Render("⚙️  Settings"))
 	b.WriteString("\n\n")
 
-	// Server Configuration Section
-	b.WriteString(m.renderServerConfig())
-	b.WriteString("\n")
+	// Show different views based on mode
+	if m.viewMode == ViewModeLogs {
+		b.WriteString(m.renderServerLogs())
+	} else {
+		// Server Configuration Section
+		b.WriteString(m.renderServerConfig())
+		b.WriteString("\n")
 
-	// Server Health Section
-	b.WriteString(m.renderServerHealth())
-	b.WriteString("\n")
+		// Server Management Section
+		if m.config != nil && m.config.ServerManagement.Enabled {
+			b.WriteString(m.renderServerManagement())
+			b.WriteString("\n")
+		}
 
-	// Application Info Section
-	b.WriteString(m.renderAppInfo())
+		// Server Health Section
+		b.WriteString(m.renderServerHealth())
+		b.WriteString("\n")
+
+		// Application Info Section
+		b.WriteString(m.renderAppInfo())
+	}
+
 	b.WriteString("\n")
 
 	// Footer
@@ -243,6 +319,75 @@ func (m Model) renderAppInfo() string {
 	return b.String()
 }
 
+// renderServerManagement renders the server management section
+func (m Model) renderServerManagement() string {
+	var b strings.Builder
+
+	b.WriteString(sectionStyle.Render("Server Management"))
+	b.WriteString("\n")
+
+	if m.serverManager == nil {
+		b.WriteString(mutedStyle.Render("Server management not available"))
+		return b.String()
+	}
+
+	status := m.serverManager.GetStatus()
+	pid := m.serverManager.GetPID()
+	uptime := m.serverManager.GetUptime()
+
+	// Status display
+	var statusDisplay string
+	switch status {
+	case server.StatusRunning:
+		statusDisplay = successStyle.Render("● Running")
+	case server.StatusStarting:
+		statusDisplay = lipgloss.NewStyle().Foreground(colorWarning).Render("⟳ Starting")
+	case server.StatusStopping:
+		statusDisplay = lipgloss.NewStyle().Foreground(colorWarning).Render("⟳ Stopping")
+	case server.StatusStopped:
+		statusDisplay = mutedStyle.Render("○ Stopped")
+	case server.StatusError:
+		statusDisplay = errorStyle.Render("✗ Error")
+	}
+
+	b.WriteString(m.renderConfigLine("Status", statusDisplay))
+
+	if status == server.StatusRunning {
+		b.WriteString(m.renderConfigLine("PID", fmt.Sprintf("%d", pid)))
+		b.WriteString(m.renderConfigLine("Uptime", m.formatDuration(uptime)))
+	}
+
+	b.WriteString(m.renderConfigLine("Executable", m.config.ServerManagement.ExecutablePath))
+	b.WriteString(m.renderConfigLine("Auto-start", fmt.Sprintf("%v", m.config.ServerManagement.AutoStart)))
+
+	return b.String()
+}
+
+// renderServerLogs renders the server logs view
+func (m Model) renderServerLogs() string {
+	var b strings.Builder
+
+	b.WriteString(sectionStyle.Render("Server Logs"))
+	b.WriteString("\n")
+
+	if m.serverManager == nil {
+		b.WriteString(mutedStyle.Render("No server manager available"))
+		return b.String()
+	}
+
+	logs := m.serverManager.GetLogs(m.logLines)
+	if len(logs) == 0 {
+		b.WriteString(mutedStyle.Render("No logs available"))
+	} else {
+		for _, log := range logs {
+			b.WriteString(mutedStyle.Render(log))
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
 // renderConfigLine renders a configuration line
 func (m Model) renderConfigLine(label, value string) string {
 	return lipgloss.JoinHorizontal(
@@ -254,13 +399,44 @@ func (m Model) renderConfigLine(label, value string) string {
 
 // renderFooter renders the footer with controls
 func (m Model) renderFooter() string {
-	controls := []string{
-		"h: health check",
-		"r: reload config",
-		"Esc: back",
+	var controls []string
+
+	if m.viewMode == ViewModeLogs {
+		controls = []string{
+			"l: back to main",
+			"c: clear logs",
+			"Esc: back",
+		}
+	} else {
+		controls = []string{
+			"h: health check",
+			"r: reload config",
+		}
+
+		if m.config != nil && m.config.ServerManagement.Enabled && m.serverManager != nil {
+			status := m.serverManager.GetStatus()
+			if status == server.StatusStopped {
+				controls = append(controls, "s: start server")
+			} else if status == server.StatusRunning {
+				controls = append(controls, "x: stop server", "t: restart")
+			}
+			controls = append(controls, "l: view logs")
+		}
+
+		controls = append(controls, "Esc: back")
 	}
 
 	return helpStyle.Render(strings.Join(controls, " • "))
+}
+
+// formatDuration formats a duration for display
+func (m Model) formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	} else if d < time.Hour {
+		return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
 // formatRelativeTime formats a time relative to now

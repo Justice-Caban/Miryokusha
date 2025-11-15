@@ -2,9 +2,10 @@ package config
 
 // Config represents the application configuration
 type Config struct {
-	Servers     []ServerConfig  `mapstructure:"servers"`
-	Preferences PreferencesConfig `mapstructure:"preferences"`
-	Paths       PathsConfig     `mapstructure:"paths"`
+	Servers         []ServerConfig        `mapstructure:"servers"`
+	ServerManagement ServerManagementConfig `mapstructure:"server_management"`
+	Preferences     PreferencesConfig     `mapstructure:"preferences"`
+	Paths           PathsConfig           `mapstructure:"paths"`
 }
 
 // ServerConfig represents a Suwayomi server configuration
@@ -21,6 +22,15 @@ type AuthConfig struct {
 	Username string `mapstructure:"username,omitempty"`
 	Password string `mapstructure:"password,omitempty"`
 	Token    string `mapstructure:"token,omitempty"`
+}
+
+// ServerManagementConfig represents server process management configuration
+type ServerManagementConfig struct {
+	Enabled        bool     `mapstructure:"enabled"`         // Enable server management
+	ExecutablePath string   `mapstructure:"executable_path"` // Path to Suwayomi JAR/binary
+	Args           []string `mapstructure:"args"`            // Additional arguments
+	WorkDir        string   `mapstructure:"work_dir"`        // Working directory
+	AutoStart      bool     `mapstructure:"auto_start"`      // Start server on app launch
 }
 
 // PreferencesConfig represents user preferences
@@ -45,6 +55,13 @@ type PathsConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Servers: []ServerConfig{},
+		ServerManagement: ServerManagementConfig{
+			Enabled:        false,
+			ExecutablePath: "",
+			Args:           []string{},
+			WorkDir:        "",
+			AutoStart:      false,
+		},
 		Preferences: PreferencesConfig{
 			Theme:          "dark",
 			DefaultServer:  0,
