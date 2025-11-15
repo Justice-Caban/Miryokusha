@@ -6,6 +6,8 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/config"
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/extensions"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/reader"
@@ -41,9 +43,10 @@ type AppModel struct {
 	storage       *storage.Storage
 
 	// View models
-	libraryModel library.Model
-	historyModel history.Model
-	readerModel  *reader.Model
+	libraryModel     library.Model
+	historyModel     history.Model
+	extensionsModel  extensions.Model
+	readerModel      *reader.Model
 }
 
 // NewAppModel creates a new application model
@@ -65,19 +68,29 @@ func NewAppModel() AppModel {
 	// Initialize source manager
 	sm := source.NewSourceManager()
 
+	// Initialize Suwayomi client if server configured
+	var suwayomiClient *suwayomi.Client
+	if defaultServer := cfg.GetDefaultServer(); defaultServer != nil {
+		suwayomiClient = suwayomi.NewClient(defaultServer.URL)
+	}
+
 	// Initialize library model
 	libModel := library.NewModel(sm, st)
 
 	// Initialize history model
 	histModel := history.NewModel(sm, st)
 
+	// Initialize extensions model
+	extModel := extensions.NewModel(suwayomiClient)
+
 	return AppModel{
-		currentView:   ViewHome,
-		config:        cfg,
-		sourceManager: sm,
-		storage:       st,
-		libraryModel:  libModel,
-		historyModel:  histModel,
+		currentView:      ViewHome,
+		config:           cfg,
+		sourceManager:    sm,
+		storage:          st,
+		libraryModel:     libModel,
+		historyModel:     histModel,
+		extensionsModel:  extModel,
 	}
 }
 
@@ -178,6 +191,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "6":
 			if m.currentView == ViewHome {
 				m.currentView = ViewExtensions
+				m.extensionsModel, cmd = m.extensionsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+				return m, cmd
 			}
 		case "7":
 			if m.currentView == ViewHome {
@@ -199,6 +214,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ViewHistory:
 		m.historyModel, cmd = m.historyModel.Update(msg)
+		return m, cmd
+
+	case ViewExtensions:
+		m.extensionsModel, cmd = m.extensionsModel.Update(msg)
 		return m, cmd
 
 	case ViewReader:
@@ -239,7 +258,7 @@ func (m AppModel) View() string {
 	case ViewDownloads:
 		content = m.renderPlaceholderView("Downloads", "📥 Download queue will appear here")
 	case ViewExtensions:
-		content = m.renderPlaceholderView("Extensions", "🧩 Manage extensions here")
+		content = m.extensionsModel.View()
 	case ViewSettings:
 		content = m.renderPlaceholderView("Settings", "⚙️  Application settings")
 	default:
