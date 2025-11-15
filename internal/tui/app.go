@@ -4,9 +4,11 @@ import (
 	"fmt"
 
 	"github.com/Justice-Caban/Miryokusha/internal/config"
+	"github.com/Justice-Caban/Miryokusha/internal/downloads"
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
 	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
+	tuiDownloads "github.com/Justice-Caban/Miryokusha/internal/tui/downloads"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/extensions"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
@@ -38,14 +40,16 @@ type AppModel struct {
 	err         error
 
 	// Dependencies
-	config        *config.Config
-	sourceManager *source.SourceManager
-	storage       *storage.Storage
+	config          *config.Config
+	sourceManager   *source.SourceManager
+	storage         *storage.Storage
+	downloadManager *downloads.Manager
 
 	// View models
 	libraryModel     library.Model
 	historyModel     history.Model
 	extensionsModel  extensions.Model
+	downloadsModel   tuiDownloads.Model
 	readerModel      *reader.Model
 }
 
@@ -83,14 +87,24 @@ func NewAppModel() AppModel {
 	// Initialize extensions model
 	extModel := extensions.NewModel(suwayomiClient)
 
+	// Initialize download manager
+	downloadConfig := downloads.DefaultDownloadConfig()
+	downloadMgr := downloads.NewManager(downloadConfig, sm)
+	downloadMgr.Start() // Auto-start the download manager
+
+	// Initialize downloads model
+	dlModel := tuiDownloads.NewModel(downloadMgr)
+
 	return AppModel{
 		currentView:      ViewHome,
 		config:           cfg,
 		sourceManager:    sm,
 		storage:          st,
+		downloadManager:  downloadMgr,
 		libraryModel:     libModel,
 		historyModel:     histModel,
 		extensionsModel:  extModel,
+		downloadsModel:   dlModel,
 	}
 }
 
@@ -187,6 +201,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "5":
 			if m.currentView == ViewHome {
 				m.currentView = ViewDownloads
+				m.downloadsModel, cmd = m.downloadsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+				return m, cmd
 			}
 		case "6":
 			if m.currentView == ViewHome {
@@ -214,6 +230,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ViewHistory:
 		m.historyModel, cmd = m.historyModel.Update(msg)
+		return m, cmd
+
+	case ViewDownloads:
+		m.downloadsModel, cmd = m.downloadsModel.Update(msg)
 		return m, cmd
 
 	case ViewExtensions:
@@ -256,7 +276,7 @@ func (m AppModel) View() string {
 	case ViewBrowse:
 		content = m.renderPlaceholderView("Browse", "🔍 Browse manga sources here")
 	case ViewDownloads:
-		content = m.renderPlaceholderView("Downloads", "📥 Download queue will appear here")
+		content = m.downloadsModel.View()
 	case ViewExtensions:
 		content = m.extensionsModel.View()
 	case ViewSettings:
