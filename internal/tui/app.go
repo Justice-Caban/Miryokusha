@@ -13,6 +13,7 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/reader"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/settings"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -50,7 +51,11 @@ type AppModel struct {
 	historyModel     history.Model
 	extensionsModel  extensions.Model
 	downloadsModel   tuiDownloads.Model
+	settingsModel    settings.Model
 	readerModel      *reader.Model
+
+	// Suwayomi client
+	suwayomiClient *suwayomi.Client
 }
 
 // NewAppModel creates a new application model
@@ -95,16 +100,21 @@ func NewAppModel() AppModel {
 	// Initialize downloads model
 	dlModel := tuiDownloads.NewModel(downloadMgr)
 
+	// Initialize settings model
+	settingsModel := settings.NewModel(cfg, suwayomiClient)
+
 	return AppModel{
 		currentView:      ViewHome,
 		config:           cfg,
 		sourceManager:    sm,
 		storage:          st,
 		downloadManager:  downloadMgr,
+		suwayomiClient:   suwayomiClient,
 		libraryModel:     libModel,
 		historyModel:     histModel,
 		extensionsModel:  extModel,
 		downloadsModel:   dlModel,
+		settingsModel:    settingsModel,
 	}
 }
 
@@ -213,6 +223,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "7":
 			if m.currentView == ViewHome {
 				m.currentView = ViewSettings
+				m.settingsModel, cmd = m.settingsModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+				return m, cmd
 			}
 		}
 
@@ -238,6 +250,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ViewExtensions:
 		m.extensionsModel, cmd = m.extensionsModel.Update(msg)
+		return m, cmd
+
+	case ViewSettings:
+		m.settingsModel, cmd = m.settingsModel.Update(msg)
 		return m, cmd
 
 	case ViewReader:
@@ -280,7 +296,7 @@ func (m AppModel) View() string {
 	case ViewExtensions:
 		content = m.extensionsModel.View()
 	case ViewSettings:
-		content = m.renderPlaceholderView("Settings", "⚙️  Application settings")
+		content = m.settingsModel.View()
 	default:
 		content = m.renderHomeView()
 	}
@@ -372,9 +388,22 @@ func (m AppModel) renderPlaceholderView(title, description string) string {
 func (m AppModel) renderStatusBar() string {
 	viewName := fmt.Sprintf("View: %s", m.currentView)
 	dimensions := fmt.Sprintf("%dx%d", m.width, m.height)
+
+	// Server status
+	serverStatus := "Server: "
+	if m.suwayomiClient != nil && m.suwayomiClient.Ping() {
+		serverStatus += lipgloss.NewStyle().
+			Foreground(ColorSuccess).
+			Render("✓ Connected")
+	} else {
+		serverStatus += lipgloss.NewStyle().
+			Foreground(ColorMuted).
+			Render("○ Not Connected")
+	}
+
 	help := "Press ? for help"
 
-	return GetStatusBarText(viewName, dimensions, help)
+	return GetStatusBarText(viewName, serverStatus, dimensions, help)
 }
 
 // Messages

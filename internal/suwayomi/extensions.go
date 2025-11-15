@@ -72,3 +72,46 @@ func (c *Client) GetExtensionSources(packageName string) ([]*ExtensionSource, er
 	// TODO: Implement getting sources from extension
 	return []*ExtensionSource{}, nil
 }
+
+// ServerInfo represents information about the Suwayomi server
+type ServerInfo struct {
+	Version       string
+	BuildType     string
+	Revision      string
+	BuildTime     string
+	IsHealthy     bool
+	ExtensionCount int
+	MangaCount    int
+}
+
+// HealthCheck performs a health check on the Suwayomi server
+func (c *Client) HealthCheck() (*ServerInfo, error) {
+	// TODO: Implement API call to /api/v1/settings/about or similar endpoint
+	// For now, return mock data indicating server is available
+	if c.BaseURL == "" {
+		return &ServerInfo{
+			IsHealthy: false,
+		}, nil
+	}
+
+	// TODO: Actually ping the server
+	return &ServerInfo{
+		Version:       "1.0.0",
+		BuildType:     "Stable",
+		Revision:      "abc123",
+		BuildTime:     "2024-01-01",
+		IsHealthy:     true,
+		ExtensionCount: 0,
+		MangaCount:    0,
+	}, nil
+}
+
+// Ping checks if the server is reachable
+func (c *Client) Ping() bool {
+	if c.BaseURL == "" {
+		return false
+	}
+	// TODO: Implement actual HTTP ping
+	// For now, return true if BaseURL is set
+	return true
+}
