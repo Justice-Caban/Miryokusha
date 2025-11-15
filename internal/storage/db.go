@@ -78,6 +78,48 @@ func getDBPath() (string, error) {
 
 // initSchema initializes the database schema
 func (db *DB) initSchema() error {
+	// Create schema version table first
+	_, err := db.conn.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_version (
+			version INTEGER PRIMARY KEY,
+			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create schema_version table: %w", err)
+	}
+
+	// Check current schema version
+	var currentVersion int
+	err = db.conn.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&currentVersion)
+	if err != nil {
+		return fmt.Errorf("failed to get schema version: %w", err)
+	}
+
+	// If schema is already at latest version, skip
+	const latestVersion = 1
+	if currentVersion >= latestVersion {
+		return nil
+	}
+
+	// Apply schema migrations
+	if currentVersion < 1 {
+		if err := db.applySchemaV1(); err != nil {
+			return fmt.Errorf("failed to apply schema v1: %w", err)
+		}
+
+		// Record schema version
+		_, err = db.conn.Exec("INSERT INTO schema_version (version) VALUES (?)", 1)
+		if err != nil {
+			return fmt.Errorf("failed to record schema version: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// applySchemaV1 applies the initial schema (version 1)
+func (db *DB) applySchemaV1() error {
 	schema := `
 	-- Reading history table
 	CREATE TABLE IF NOT EXISTS reading_history (
@@ -181,4 +223,44 @@ func (db *DB) initSchema() error {
 // GetConnection returns the underlying database connection
 func (db *DB) GetConnection() *sql.DB {
 	return db.conn
+}
+
+// WithTransaction executes a function within a database transaction
+// If the function returns an error, the transaction is rolled back
+// Otherwise, the transaction is committed
+func (db *DB) WithTransaction(fn func(*sql.Tx) error) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p) // Re-throw panic after rollback
+		}
+	}()
+
+	if err := fn(tx); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("transaction error: %w, rollback error: %v", err, rbErr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetSchemaVersion returns the current schema version
+func (db *DB) GetSchemaVersion() (int, error) {
+	var version int
+	err := db.conn.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&version)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get schema version: %w", err)
+	}
+	return version, nil
 }
