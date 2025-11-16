@@ -1,5 +1,13 @@
 package suwayomi
 
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+)
+
 // Extension represents a Suwayomi extension
 type Extension struct {
 	Name        string
@@ -24,14 +32,25 @@ type ExtensionSource struct {
 
 // Client represents a Suwayomi server client
 type Client struct {
-	BaseURL string
-	// TODO: Add HTTP client and authentication
+	BaseURL    string
+	HTTPClient *http.Client
 }
 
 // NewClient creates a new Suwayomi client
 func NewClient(baseURL string) *Client {
+	// Ensure baseURL has http:// or https:// prefix
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "http://" + baseURL
+	}
+
+	// Remove trailing slash
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
 	return &Client{
 		BaseURL: baseURL,
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 }
 
@@ -75,34 +94,67 @@ func (c *Client) GetExtensionSources(packageName string) ([]*ExtensionSource, er
 
 // ServerInfo represents information about the Suwayomi server
 type ServerInfo struct {
-	Version       string
-	BuildType     string
-	Revision      string
-	BuildTime     string
-	IsHealthy     bool
+	Version        string
+	BuildType      string
+	Revision       string
+	BuildTime      string
+	IsHealthy      bool
 	ExtensionCount int
-	MangaCount    int
+	MangaCount     int
+}
+
+// AboutResponse represents the /api/v1/settings/about endpoint response
+type AboutResponse struct {
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Revision string `json:"revision"`
+	BuildType string `json:"buildType"`
+	BuildTime int64  `json:"buildTime"`
 }
 
 // HealthCheck performs a health check on the Suwayomi server
 func (c *Client) HealthCheck() (*ServerInfo, error) {
-	// TODO: Implement API call to /api/v1/settings/about or similar endpoint
-	// For now, return mock data indicating server is available
 	if c.BaseURL == "" {
 		return &ServerInfo{
 			IsHealthy: false,
-		}, nil
+		}, fmt.Errorf("no server URL configured")
 	}
 
-	// TODO: Actually ping the server
+	// Try to fetch server info from /api/v1/settings/about
+	url := c.BaseURL + "/api/v1/settings/about"
+
+	resp, err := c.HTTPClient.Get(url)
+	if err != nil {
+		return &ServerInfo{
+			IsHealthy: false,
+		}, fmt.Errorf("failed to connect to server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return &ServerInfo{
+			IsHealthy: false,
+		}, fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	var about AboutResponse
+	if err := json.NewDecoder(resp.Body).Decode(&about); err != nil {
+		return &ServerInfo{
+			IsHealthy: false,
+		}, fmt.Errorf("failed to parse server response: %w", err)
+	}
+
+	// Convert build time from milliseconds to readable format
+	buildTime := time.UnixMilli(about.BuildTime).Format("2006-01-02 15:04:05")
+
 	return &ServerInfo{
-		Version:       "1.0.0",
-		BuildType:     "Stable",
-		Revision:      "abc123",
-		BuildTime:     "2024-01-01",
-		IsHealthy:     true,
-		ExtensionCount: 0,
-		MangaCount:    0,
+		Version:        about.Version,
+		BuildType:      about.BuildType,
+		Revision:       about.Revision,
+		BuildTime:      buildTime,
+		IsHealthy:      true,
+		ExtensionCount: 0, // TODO: Fetch from /api/v1/extension/list
+		MangaCount:     0, // TODO: Fetch from /api/v1/manga/list
 	}, nil
 }
 
@@ -111,7 +163,15 @@ func (c *Client) Ping() bool {
 	if c.BaseURL == "" {
 		return false
 	}
-	// TODO: Implement actual HTTP ping
-	// For now, return true if BaseURL is set
-	return true
+
+	// Try to ping the about endpoint
+	url := c.BaseURL + "/api/v1/settings/about"
+
+	resp, err := c.HTTPClient.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
 }
