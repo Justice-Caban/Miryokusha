@@ -416,7 +416,7 @@ func (m Model) renderBrowse() string {
 			ext.Name,
 			langBadge,
 			nsfwIndicator,
-			ext.Version,
+			ext.VersionName,
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -489,7 +489,7 @@ func (m Model) renderInstalled() string {
 			ext.Name,
 			langBadge,
 			nsfwIndicator,
-			ext.Version,
+			ext.VersionName,
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -597,16 +597,16 @@ func (m Model) toggleInstall() tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		if ext.IsInstalled {
-			err = m.client.UninstallExtension(ext.PackageName)
+			err = m.client.UninstallExtension(ext.PkgName)
 		} else {
-			err = m.client.InstallExtension(ext.PackageName)
+			err = m.client.InstallExtension(ext.PkgName)
 		}
 
 		if err != nil {
 			return extensionErrorMsg{err: err}
 		}
 
-		return extensionInstalledMsg{packageName: ext.PackageName}
+		return extensionInstalledMsg{packageName: ext.PkgName}
 	}
 }
 
@@ -626,11 +626,11 @@ func (m Model) updateExtension() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		err := m.client.UpdateExtension(ext.PackageName)
+		err := m.client.UpdateExtension(ext.PkgName)
 		if err != nil {
 			return extensionErrorMsg{err: err}
 		}
-		return extensionInstalledMsg{packageName: ext.PackageName}
+		return extensionInstalledMsg{packageName: ext.PkgName}
 	}
 }
 
@@ -653,7 +653,7 @@ func (m Model) updateAll() tea.Cmd {
 
 	return func() tea.Msg {
 		for _, ext := range toUpdate {
-			err := m.client.UpdateExtension(ext.PackageName)
+			err := m.client.UpdateExtension(ext.PkgName)
 			if err != nil {
 				return extensionErrorMsg{err: err}
 			}

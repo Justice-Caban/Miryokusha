@@ -10,15 +10,15 @@ import (
 
 // Extension represents a Suwayomi extension
 type Extension struct {
-	Name        string
-	PackageName string
-	Version     string
-	Language    string
-	IsNSFW      bool
-	IsInstalled bool
-	HasUpdate   bool
-	IsObsolete  bool
-	IconURL     string
+	Name         string
+	PkgName      string
+	VersionName  string
+	Language     string
+	IsNSFW       bool
+	IsInstalled  bool
+	HasUpdate    bool
+	IsObsolete   bool
+	IconURL      string
 }
 
 // ExtensionSource represents a manga source provided by an extension
@@ -62,39 +62,73 @@ func NewClient(baseURL string) *Client {
 
 // ListAvailableExtensions lists all available extensions from the repository
 func (c *Client) ListAvailableExtensions() ([]*Extension, error) {
-	// TODO: Implement API call to /api/v1/extension/list
-	// For now, return empty list
-	return []*Extension{}, nil
+	// Use GraphQL to fetch all extensions (both installed and available)
+	nodes, err := c.GraphQL.GetExtensionList()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch extensions: %w", err)
+	}
+
+	// Convert to Extension type
+	extensions := make([]*Extension, 0, len(nodes))
+	for _, node := range nodes {
+		ext := &Extension{
+			PkgName:      node.PkgName,
+			Name:         node.Name,
+			VersionName:  node.VersionName,
+			Language:     node.Lang,
+			IsInstalled:  node.IsInstalled,
+			HasUpdate:    node.HasUpdate,
+			IsObsolete:   node.IsObsolete,
+			IsNSFW:       node.IsNsfw,
+			IconURL:      node.IconURL,
+		}
+		extensions = append(extensions, ext)
+	}
+
+	return extensions, nil
 }
 
 // ListInstalledExtensions lists all installed extensions
 func (c *Client) ListInstalledExtensions() ([]*Extension, error) {
-	// TODO: Implement API call to /api/v1/extension/list with filter
-	// For now, return empty list
-	return []*Extension{}, nil
+	// Get all extensions and filter for installed ones
+	allExtensions, err := c.ListAvailableExtensions()
+	if err != nil {
+		return nil, err
+	}
+
+	installed := make([]*Extension, 0)
+	for _, ext := range allExtensions {
+		if ext.IsInstalled {
+			installed = append(installed, ext)
+		}
+	}
+
+	return installed, nil
 }
 
 // InstallExtension installs an extension by package name
 func (c *Client) InstallExtension(packageName string) error {
-	// TODO: Implement API call to /api/v1/extension/install/{pkgName}
-	return nil
+	// Use GraphQL to install extension
+	return c.GraphQL.InstallExtension(packageName)
 }
 
 // UninstallExtension uninstalls an extension by package name
 func (c *Client) UninstallExtension(packageName string) error {
-	// TODO: Implement API call to /api/v1/extension/uninstall/{pkgName}
-	return nil
+	// Use GraphQL to uninstall extension
+	return c.GraphQL.UninstallExtension(packageName)
 }
 
 // UpdateExtension updates an extension by package name
 func (c *Client) UpdateExtension(packageName string) error {
-	// TODO: Implement API call to /api/v1/extension/update/{pkgName}
-	return nil
+	// Use GraphQL to update extension
+	return c.GraphQL.UpdateExtension(packageName)
 }
 
 // GetExtensionSources gets all sources provided by an extension
 func (c *Client) GetExtensionSources(packageName string) ([]*ExtensionSource, error) {
-	// TODO: Implement getting sources from extension
+	// For now, we could use GraphQL to query sources
+	// This would require a custom GraphQL query
+	// For now, return empty list
 	return []*ExtensionSource{}, nil
 }
 
@@ -153,15 +187,25 @@ func (c *Client) HealthCheck() (*ServerInfo, error) {
 	// Convert build time from milliseconds to readable format
 	buildTime := time.UnixMilli(about.BuildTime).Format("2006-01-02 15:04:05")
 
-	return &ServerInfo{
-		Version:        about.Version,
-		BuildType:      about.BuildType,
-		Revision:       about.Revision,
-		BuildTime:      buildTime,
-		IsHealthy:      true,
-		ExtensionCount: 0, // TODO: Fetch from /api/v1/extension/list
-		MangaCount:     0, // TODO: Fetch from /api/v1/manga/list
-	}, nil
+	info := &ServerInfo{
+		Version:   about.Version,
+		BuildType: about.BuildType,
+		Revision:  about.Revision,
+		BuildTime: buildTime,
+		IsHealthy: true,
+	}
+
+	// Try to fetch extension count (don't fail if this fails)
+	if extensions, err := c.ListInstalledExtensions(); err == nil {
+		info.ExtensionCount = len(extensions)
+	}
+
+	// Try to fetch manga count (don't fail if this fails)
+	if resp, err := c.GraphQL.GetMangaList(true, 1, 0); err == nil {
+		info.MangaCount = resp.Mangas.TotalCount
+	}
+
+	return info, nil
 }
 
 // Ping checks if the server is reachable
