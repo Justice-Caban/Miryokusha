@@ -65,16 +65,22 @@ type Model struct {
 	healthError     error
 
 	// View mode
-	viewMode ViewMode // "main", "logs"
+	viewMode ViewMode // "main", "logs", "edit_updates"
 	logLines int      // Number of log lines to show
+
+	// Edit mode
+	message      string // Status message to display
+	messageType  string // "success", "error", "info"
+	messageTimer int    // Frames remaining to show message
 }
 
 // ViewMode represents the current view mode
 type ViewMode string
 
 const (
-	ViewModeMain ViewMode = "main"
-	ViewModeLogs ViewMode = "logs"
+	ViewModeMain        ViewMode = "main"
+	ViewModeLogs        ViewMode = "logs"
+	ViewModeEditUpdates ViewMode = "edit_updates"
 )
 
 // NewModel creates a new settings model
@@ -102,6 +108,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle edit mode separately
+		if m.viewMode == ViewModeEditUpdates {
+			return m.handleEditUpdatesInput(msg)
+		}
+
 		switch msg.String() {
 		case "h", "H":
 			// Perform health check
@@ -112,6 +123,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			cfg, err := config.Load()
 			if err == nil {
 				m.config = cfg
+				m.setMessage("Configuration reloaded", "success")
+			} else {
+				m.setMessage(fmt.Sprintf("Failed to reload: %v", err), "error")
+			}
+			return m, nil
+
+		case "e", "E":
+			// Enter edit updates mode
+			if m.viewMode == ViewModeMain {
+				m.viewMode = ViewModeEditUpdates
 			}
 			return m, nil
 
@@ -120,7 +141,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if m.serverManager != nil && m.config.ServerManagement.Enabled {
 				if m.serverManager.GetStatus() == server.StatusStopped {
 					if err := m.serverManager.Start(); err != nil {
-						// Log error but continue
+						m.setMessage(fmt.Sprintf("Failed to start: %v", err), "error")
+					} else {
+						m.setMessage("Server starting...", "success")
 					}
 				}
 			}
@@ -131,7 +154,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if m.serverManager != nil {
 				if m.serverManager.GetStatus() == server.StatusRunning {
 					if err := m.serverManager.Stop(); err != nil {
-						// Log error but continue
+						m.setMessage(fmt.Sprintf("Failed to stop: %v", err), "error")
+					} else {
+						m.setMessage("Server stopped", "success")
 					}
 				}
 			}
@@ -141,7 +166,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			// Restart server
 			if m.serverManager != nil && m.config.ServerManagement.Enabled {
 				if err := m.serverManager.Restart(); err != nil {
-					// Log error but continue
+					m.setMessage(fmt.Sprintf("Failed to restart: %v", err), "error")
+				} else {
+					m.setMessage("Server restarting...", "success")
 				}
 			}
 			return m, nil
@@ -159,6 +186,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			// Clear logs
 			if m.serverManager != nil {
 				m.serverManager.ClearLogs()
+				m.setMessage("Logs cleared", "success")
 			}
 			return m, nil
 		}
@@ -182,10 +210,19 @@ func (m Model) View() string {
 	b.WriteString(titleStyle.Render("⚙️  Settings"))
 	b.WriteString("\n\n")
 
+	// Show message if present
+	if m.messageTimer > 0 && m.message != "" {
+		b.WriteString(m.renderMessage())
+		b.WriteString("\n")
+	}
+
 	// Show different views based on mode
-	if m.viewMode == ViewModeLogs {
+	switch m.viewMode {
+	case ViewModeLogs:
 		b.WriteString(m.renderServerLogs())
-	} else {
+	case ViewModeEditUpdates:
+		b.WriteString(m.renderEditUpdates())
+	default:
 		// Server Configuration Section
 		b.WriteString(m.renderServerConfig())
 		b.WriteString("\n")
@@ -345,7 +382,7 @@ func (m Model) renderSmartUpdates() string {
 	b.WriteString(m.renderConfigLine("Auto-Update", autoUpdateValue))
 
 	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("Note: Edit config.yaml to change these settings"))
+	b.WriteString(mutedStyle.Render("Press 'e' to edit these settings interactively"))
 
 	return b.String()
 }
@@ -448,16 +485,25 @@ func (m Model) renderConfigLine(label, value string) string {
 func (m Model) renderFooter() string {
 	var controls []string
 
-	if m.viewMode == ViewModeLogs {
+	switch m.viewMode {
+	case ViewModeLogs:
 		controls = []string{
 			"l: back to main",
 			"c: clear logs",
 			"Esc: back",
 		}
-	} else {
+	case ViewModeEditUpdates:
+		controls = []string{
+			"1-6: toggle settings",
+			"+/-: adjust values",
+			"s: save",
+			"Esc: cancel",
+		}
+	default:
 		controls = []string{
 			"h: health check",
 			"r: reload config",
+			"e: edit updates",
 		}
 
 		if m.config != nil && m.config.ServerManagement.Enabled && m.serverManager != nil {
@@ -511,6 +557,155 @@ func (m Model) formatRelativeTime(t time.Time) string {
 		}
 		return fmt.Sprintf("%d days ago", days)
 	}
+}
+
+// setMessage sets a status message to display
+func (m *Model) setMessage(msg, msgType string) {
+	m.message = msg
+	m.messageType = msgType
+	m.messageTimer = 180 // Display for ~3 seconds (60 fps)
+}
+
+// renderMessage renders the status message with appropriate styling
+func (m Model) renderMessage() string {
+	if m.message == "" {
+		return ""
+	}
+
+	var style lipgloss.Style
+	switch m.messageType {
+	case "success":
+		style = successStyle
+	case "error":
+		style = errorStyle
+	default:
+		style = mutedStyle
+	}
+
+	return style.Render(m.message)
+}
+
+// handleEditUpdatesInput handles keyboard input in edit mode
+func (m Model) handleEditUpdatesInput(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if m.config == nil {
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "esc":
+		// Cancel editing and return to main view
+		m.viewMode = ViewModeMain
+		return m, nil
+
+	case "1":
+		// Toggle smart updates
+		m.config.Updates.SmartUpdate = !m.config.Updates.SmartUpdate
+
+	case "2":
+		// Toggle update only ongoing
+		m.config.Updates.UpdateOnlyOngoing = !m.config.Updates.UpdateOnlyOngoing
+
+	case "3":
+		// Toggle update only started
+		m.config.Updates.UpdateOnlyStarted = !m.config.Updates.UpdateOnlyStarted
+
+	case "4":
+		// Toggle auto-update
+		m.config.Updates.AutoUpdateEnabled = !m.config.Updates.AutoUpdateEnabled
+
+	case "+", "=":
+		// Increase min interval hours
+		if m.config.Updates.MinIntervalHours < 168 {
+			m.config.Updates.MinIntervalHours++
+		}
+
+	case "-", "_":
+		// Decrease min interval hours
+		if m.config.Updates.MinIntervalHours > 1 {
+			m.config.Updates.MinIntervalHours--
+		}
+
+	case "s", "S":
+		// Save configuration
+		if err := m.saveConfig(); err != nil {
+			m.setMessage(fmt.Sprintf("Failed to save: %v", err), "error")
+		} else {
+			m.setMessage("Configuration saved successfully", "success")
+			m.viewMode = ViewModeMain
+		}
+	}
+
+	return m, nil
+}
+
+// renderEditUpdates renders the edit updates interface
+func (m Model) renderEditUpdates() string {
+	var b strings.Builder
+
+	b.WriteString(sectionStyle.Render("Edit Smart Updates Settings"))
+	b.WriteString("\n\n")
+
+	if m.config == nil {
+		b.WriteString(mutedStyle.Render("No configuration loaded"))
+		return b.String()
+	}
+
+	// Smart update toggle
+	smartUpdateValue := "Disabled"
+	if m.config.Updates.SmartUpdate {
+		smartUpdateValue = successStyle.Render("Enabled ✓")
+	}
+	b.WriteString(m.renderConfigLine("[1] Smart Updates", smartUpdateValue))
+
+	// Only ongoing toggle
+	onlyOngoingValue := "No"
+	if m.config.Updates.UpdateOnlyOngoing {
+		onlyOngoingValue = successStyle.Render("Yes ✓")
+	}
+	b.WriteString(m.renderConfigLine("[2] Only Ongoing", onlyOngoingValue))
+
+	// Only started toggle
+	onlyStartedValue := "No"
+	if m.config.Updates.UpdateOnlyStarted {
+		onlyStartedValue = successStyle.Render("Yes ✓")
+	}
+	b.WriteString(m.renderConfigLine("[3] Only Started", onlyStartedValue))
+
+	// Auto-update toggle
+	autoUpdateValue := "Disabled"
+	if m.config.Updates.AutoUpdateEnabled {
+		autoUpdateValue = successStyle.Render("Enabled ✓")
+	}
+	b.WriteString(m.renderConfigLine("[4] Auto-Update", autoUpdateValue))
+
+	b.WriteString("\n")
+
+	// Min interval hours (adjustable with +/-)
+	b.WriteString(m.renderConfigLine("[+/-] Min Interval", fmt.Sprintf("%d hours", m.config.Updates.MinIntervalHours)))
+
+	// Read-only settings
+	b.WriteString("\n")
+	b.WriteString(sectionStyle.Render("Advanced Settings (edit config.yaml)"))
+	b.WriteString("\n")
+	b.WriteString(m.renderConfigLine("Max Failures", fmt.Sprintf("%d", m.config.Updates.MaxConsecutiveFailures)))
+	b.WriteString(m.renderConfigLine("Interval Multiplier", fmt.Sprintf("%.1fx", m.config.Updates.IntervalMultiplier)))
+	if m.config.Updates.AutoUpdateEnabled {
+		b.WriteString(m.renderConfigLine("Auto-Update Interval", fmt.Sprintf("%d hours", m.config.Updates.AutoUpdateIntervalHrs)))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(mutedStyle.Render("Press numbers to toggle • +/- to adjust interval • s to save • Esc to cancel"))
+
+	return b.String()
+}
+
+// saveConfig saves the current configuration to disk
+func (m Model) saveConfig() error {
+	if m.config == nil {
+		return fmt.Errorf("no configuration loaded")
+	}
+
+	return config.Save(m.config)
 }
 
 // Messages
