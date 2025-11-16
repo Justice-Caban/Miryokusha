@@ -561,8 +561,9 @@ type historyErrorMsg struct {
 }
 
 type OpenChapterMsg struct {
-	MangaID   string
-	ChapterID string
+	MangaID    string
+	MangaTitle string
+	ChapterID  string
 }
 
 // Commands
@@ -619,8 +620,9 @@ func (m Model) openSelected() tea.Cmd {
 			entry := m.continueReading[m.cursor]
 			return func() tea.Msg {
 				return OpenChapterMsg{
-					MangaID:   entry.MangaID,
-					ChapterID: entry.ChapterID,
+					MangaID:    entry.MangaID,
+					MangaTitle: entry.MangaTitle,
+					ChapterID:  entry.ChapterID,
 				}
 			}
 		}
@@ -630,8 +632,9 @@ func (m Model) openSelected() tea.Cmd {
 			entry := m.history[m.cursor]
 			return func() tea.Msg {
 				return OpenChapterMsg{
-					MangaID:   entry.MangaID,
-					ChapterID: entry.ChapterID,
+					MangaID:    entry.MangaID,
+					MangaTitle: entry.MangaTitle,
+					ChapterID:  entry.ChapterID,
 				}
 			}
 		}
