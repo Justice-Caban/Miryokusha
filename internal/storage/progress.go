@@ -10,6 +10,7 @@ import (
 type ProgressEntry struct {
 	ID          int64
 	MangaID     string
+	MangaTitle string
 	ChapterID   string
 	CurrentPage int
 	TotalPages  int
@@ -28,21 +29,22 @@ func NewProgressManager(db *DB) *ProgressManager {
 }
 
 // UpdateProgress updates or creates reading progress for a chapter
-func (pm *ProgressManager) UpdateProgress(mangaID, chapterID string, currentPage, totalPages int) error {
+func (pm *ProgressManager) UpdateProgress(mangaID, mangaTitle, chapterID string, currentPage, totalPages int) error {
 	isCompleted := currentPage >= totalPages-1
 
 	query := `
-		INSERT INTO reading_progress (manga_id, chapter_id, current_page, total_pages, is_completed, last_read_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO reading_progress (manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(manga_id, chapter_id)
 		DO UPDATE SET
+			manga_title = excluded.manga_title,
 			current_page = excluded.current_page,
 			total_pages = excluded.total_pages,
 			is_completed = excluded.is_completed,
 			last_read_at = excluded.last_read_at
 	`
 
-	_, err := pm.db.conn.Exec(query, mangaID, chapterID, currentPage, totalPages, isCompleted, time.Now())
+	_, err := pm.db.conn.Exec(query, mangaID, mangaTitle, chapterID, currentPage, totalPages, isCompleted, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to update progress: %w", err)
 	}
@@ -53,7 +55,7 @@ func (pm *ProgressManager) UpdateProgress(mangaID, chapterID string, currentPage
 // GetProgress retrieves reading progress for a specific chapter
 func (pm *ProgressManager) GetProgress(mangaID, chapterID string) (*ProgressEntry, error) {
 	query := `
-		SELECT id, manga_id, chapter_id, current_page, total_pages, is_completed, last_read_at
+		SELECT id, manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at
 		FROM reading_progress
 		WHERE manga_id = ? AND chapter_id = ?
 	`
@@ -62,6 +64,7 @@ func (pm *ProgressManager) GetProgress(mangaID, chapterID string) (*ProgressEntr
 	err := pm.db.conn.QueryRow(query, mangaID, chapterID).Scan(
 		&entry.ID,
 		&entry.MangaID,
+		&entry.MangaTitle,
 		&entry.ChapterID,
 		&entry.CurrentPage,
 		&entry.TotalPages,
@@ -82,7 +85,7 @@ func (pm *ProgressManager) GetProgress(mangaID, chapterID string) (*ProgressEntr
 // GetMangaProgress retrieves all progress entries for a manga
 func (pm *ProgressManager) GetMangaProgress(mangaID string) ([]*ProgressEntry, error) {
 	query := `
-		SELECT id, manga_id, chapter_id, current_page, total_pages, is_completed, last_read_at
+		SELECT id, manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at
 		FROM reading_progress
 		WHERE manga_id = ?
 		ORDER BY last_read_at DESC
@@ -100,7 +103,7 @@ func (pm *ProgressManager) GetMangaProgress(mangaID string) ([]*ProgressEntry, e
 // GetRecentlyRead retrieves recently read chapters across all manga
 func (pm *ProgressManager) GetRecentlyRead(limit int) ([]*ProgressEntry, error) {
 	query := `
-		SELECT id, manga_id, chapter_id, current_page, total_pages, is_completed, last_read_at
+		SELECT id, manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at
 		FROM reading_progress
 		ORDER BY last_read_at DESC
 		LIMIT ?
@@ -118,7 +121,7 @@ func (pm *ProgressManager) GetRecentlyRead(limit int) ([]*ProgressEntry, error) 
 // GetInProgressChapters retrieves all chapters that are not yet completed
 func (pm *ProgressManager) GetInProgressChapters() ([]*ProgressEntry, error) {
 	query := `
-		SELECT id, manga_id, chapter_id, current_page, total_pages, is_completed, last_read_at
+		SELECT id, manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at
 		FROM reading_progress
 		WHERE is_completed = FALSE
 		ORDER BY last_read_at DESC
@@ -136,8 +139,8 @@ func (pm *ProgressManager) GetInProgressChapters() ([]*ProgressEntry, error) {
 // MarkAsCompleted marks a chapter as completed
 func (pm *ProgressManager) MarkAsCompleted(mangaID, chapterID string, totalPages int) error {
 	query := `
-		INSERT INTO reading_progress (manga_id, chapter_id, current_page, total_pages, is_completed, last_read_at)
-		VALUES (?, ?, ?, ?, TRUE, ?)
+		INSERT INTO reading_progress (manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at)
+		VALUES (?, '', ?, ?, ?, TRUE, ?)
 		ON CONFLICT(manga_id, chapter_id)
 		DO UPDATE SET
 			current_page = excluded.total_pages,
@@ -201,6 +204,7 @@ func (pm *ProgressManager) scanProgressEntries(rows *sql.Rows) ([]*ProgressEntry
 		err := rows.Scan(
 			&entry.ID,
 			&entry.MangaID,
+		&entry.MangaTitle,
 			&entry.ChapterID,
 			&entry.CurrentPage,
 			&entry.TotalPages,

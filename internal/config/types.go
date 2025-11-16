@@ -58,6 +58,7 @@ type UpdateConfig struct {
 	MinIntervalHours       int     `mapstructure:"min_interval_hours"`       // Minimum hours between checks (default: 12)
 	UpdateOnlyOngoing      bool    `mapstructure:"update_only_ongoing"`      // Only update ongoing series
 	UpdateOnlyStarted      bool    `mapstructure:"update_only_started"`      // Only update series that have been read
+	UpdateOnlyCompleted    bool    `mapstructure:"update_only_completed"`    // Only update completed series
 	MaxConsecutiveFailures int     `mapstructure:"max_consecutive_failures"` // Skip after this many failures
 	IntervalMultiplier     float64 `mapstructure:"interval_multiplier"`      // Multiply expected interval by this
 	AutoUpdateEnabled      bool    `mapstructure:"auto_update_enabled"`      // Enable automatic updates

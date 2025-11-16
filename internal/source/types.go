@@ -14,36 +14,48 @@ const (
 
 // Manga represents manga metadata
 type Manga struct {
-	ID          string
-	Title       string
-	Author      string
-	Artist      string
-	Description string
-	Status      string
-	CoverURL    string
-	Genres      []string
-	SourceType  SourceType
-	SourceID    string
+	ID             string
+	Title          string
+	Author         string
+	Artist         string
+	Description    string
+	Status         string
+	CoverURL       string
+	Genres         []string
+	SourceType     SourceType
+	SourceID       string
+	SourceName     string
+	URL            string
+	InLibrary      bool
+	UnreadCount    int
+	DownloadCount  int
+	ChapterCount   int
+	LastReadAt     *time.Time
 }
 
 // Chapter represents a manga chapter
 type Chapter struct {
-	ID            string
-	MangaID       string
-	Title         string
-	ChapterNumber float64
-	PageCount     int
+	ID             string
+	MangaID        string
+	Title          string
+	ChapterNumber  float64
+	VolumeNumber   float64
+	PageCount      int
 	ScanlatorGroup string
-	UploadDate    time.Time
-	SourceType    SourceType
-	SourceID      string
+	UploadDate     time.Time
+	SourceType     SourceType
+	SourceID       string
+	IsRead         bool
+	IsBookmarked   bool
+	IsDownloaded   bool
 }
 
 // Page represents a manga page
 type Page struct {
-	Index    int
-	URL      string
-	ImageData []byte // For local files
+	Index     int
+	URL       string
+	ImageData []byte // For local files or cached data
+	ImageType string // MIME type (e.g., "image/jpeg", "image/png")
 }
 
 // Source is the interface that all manga sources must implement

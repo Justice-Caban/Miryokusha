@@ -11,30 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	mutedStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted)
-)
-
-// centeredText centers text in the given width and height
-func centeredText(width, height int, text string) string {
-	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Align(lipgloss.Center, lipgloss.Center)
-	return style.Render(text)
-}
-
 // SortMode represents how the library is sorted
 type SortMode int
 
@@ -257,7 +233,12 @@ func (m *Model) applyFiltersAndSort() {
 	switch m.sortMode {
 	case SortAlphabetical:
 		m.sortAlphabetically()
-	// TODO: Implement other sort modes when we have more metadata
+	case SortLastRead:
+		m.sortByLastRead()
+	case SortUnreadCount:
+		m.sortByUnreadCount()
+	case SortDateAdded:
+		m.sortByDateAdded()
 	}
 
 	// Reset cursor if out of bounds
@@ -281,18 +262,61 @@ func (m *Model) sortAlphabetically() {
 	}
 }
 
+// sortByLastRead sorts manga by last read time (most recent first)
+func (m *Model) sortByLastRead() {
+	for i := 0; i < len(m.filteredList); i++ {
+		for j := i + 1; j < len(m.filteredList); j++ {
+			iTime := m.filteredList[i].LastReadAt
+			jTime := m.filteredList[j].LastReadAt
+
+			// nil times go to the end
+			if iTime == nil && jTime != nil {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			} else if iTime != nil && jTime != nil && iTime.Before(*jTime) {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			}
+		}
+	}
+}
+
+// sortByUnreadCount sorts manga by unread chapter count (most unread first)
+func (m *Model) sortByUnreadCount() {
+	for i := 0; i < len(m.filteredList); i++ {
+		for j := i + 1; j < len(m.filteredList); j++ {
+			if m.filteredList[i].UnreadCount < m.filteredList[j].UnreadCount {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			}
+		}
+	}
+}
+
+// sortByDateAdded sorts manga by when they were added to library (newest first)
+// Note: This requires tracking when manga was added - for now, use ID as proxy
+func (m *Model) sortByDateAdded() {
+	// For manga from Suwayomi, higher IDs are typically newer additions
+	// For local manga, sort alphabetically as fallback
+	for i := 0; i < len(m.filteredList); i++ {
+		for j := i + 1; j < len(m.filteredList); j++ {
+			// Try to sort by ID descending (newer first)
+			if m.filteredList[i].ID < m.filteredList[j].ID {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			}
+		}
+	}
+}
+
 // View renders the library view
 func (m Model) View() string {
 	if m.loading {
-		return centeredText(m.width, m.height, "Loading library...")
+		return theme.CenteredText(m.width, m.height, "Loading library...")
 	}
 
 	if m.err != nil {
-		return centeredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
+		return theme.CenteredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
 	}
 
 	if len(m.manga) == 0 {
-		return centeredText(m.width, m.height, "No manga found\n\nPress 'r' to refresh")
+		return theme.CenteredText(m.width, m.height, "No manga found\n\nPress 'r' to refresh")
 	}
 
 	var b strings.Builder
@@ -313,7 +337,7 @@ func (m Model) View() string {
 
 // renderHeader renders the library header
 func (m Model) renderHeader() string {
-	title := titleStyle.Render("Library")
+	title := theme.TitleStyle.Render("Library")
 
 	// Sort mode indicator
 	sortModeStr := ""
@@ -363,7 +387,7 @@ func (m Model) renderHeader() string {
 // renderMangaList renders the list of manga
 func (m Model) renderMangaList() string {
 	if len(m.filteredList) == 0 {
-		return mutedStyle.Render("No manga match current filters")
+		return theme.MutedStyle.Render("No manga match current filters")
 	}
 
 	var b strings.Builder
@@ -435,7 +459,7 @@ func (m Model) renderFooter() string {
 		"Esc: back",
 	}
 
-	return helpStyle.Render(strings.Join(controls, " • "))
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
 }
 
 // Messages

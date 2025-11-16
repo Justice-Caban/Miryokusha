@@ -1,44 +1,14 @@
 package downloads
 
 import (
-	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Justice-Caban/Miryokusha/internal/downloads"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	sectionStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorSecondary).
-			MarginTop(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	mutedStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted)
-
-	successStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorSuccess)
-
-	errorStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorError)
-
-	warningStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorWarning)
 )
 
 // Model represents the downloads view model
@@ -57,7 +27,7 @@ type Model struct {
 	activeList    []*downloads.DownloadItem
 	queueList     []*downloads.DownloadItem
 	completedList []*downloads.DownloadItem
-	stats         downloads.DownloadStats
+	stats         *downloads.DownloadStats
 
 	// Refresh ticker
 	lastRefresh time.Time
@@ -94,7 +64,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.activeList = msg.active
 		m.queueList = msg.queue
 		m.completedList = msg.completed
-		m.stats = msg.stats
+		if msg.stats != nil {
+			m.stats = msg.stats
+		}
 		m.lastRefresh = time.Now()
 
 		// Auto-refresh every second
@@ -213,16 +185,26 @@ func (m Model) View() string {
 
 // renderHeader renders the downloads header
 func (m Model) renderHeader() string {
-	title := titleStyle.Render("Downloads")
+	title := theme.TitleStyle.Render("Downloads")
+
+	activeDownloads := 0
+	completedDownloads := 0
+	failedDownloads := 0
+
+	if m.stats != nil {
+		activeDownloads = m.stats.ActiveDownloads
+		completedDownloads = m.stats.CompletedDownloads
+		failedDownloads = m.stats.FailedDownloads
+	}
 
 	info := lipgloss.NewStyle().
 		Foreground(theme.ColorSecondary).
 		Render(fmt.Sprintf(
 			"Active: %d | Queued: %d | Completed: %d | Failed: %d",
-			m.stats.ActiveDownloads,
+			activeDownloads,
 			len(m.queueList),
-			m.stats.CompletedDownloads,
-			m.stats.FailedDownloads,
+			completedDownloads,
+			failedDownloads,
 		))
 
 	return title + "\n" + info
@@ -252,7 +234,7 @@ func (m Model) renderTabs() string {
 // renderActiveDownloads renders the active downloads list
 func (m Model) renderActiveDownloads() string {
 	if len(m.activeList) == 0 {
-		return mutedStyle.Render("\nNo active downloads")
+		return theme.MutedStyle.Render("\nNo active downloads")
 	}
 
 	var b strings.Builder
@@ -293,7 +275,7 @@ func (m Model) renderActiveDownloads() string {
 // renderQueue renders the queued downloads
 func (m Model) renderQueue() string {
 	if len(m.queueList) == 0 {
-		return mutedStyle.Render("\nQueue is empty")
+		return theme.MutedStyle.Render("\nQueue is empty")
 	}
 
 	var b strings.Builder
@@ -341,7 +323,7 @@ func (m Model) renderQueue() string {
 			statusIcon,
 			item.MangaTitle,
 			item.ChapterName,
-			mutedStyle.Render(priorityStr),
+			theme.MutedStyle.Render(priorityStr),
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -349,7 +331,7 @@ func (m Model) renderQueue() string {
 	}
 
 	if len(m.queueList) > visibleItems {
-		b.WriteString(mutedStyle.Render(fmt.Sprintf("\n... and %d more", len(m.queueList)-visibleItems)))
+		b.WriteString(theme.MutedStyle.Render(fmt.Sprintf("\n... and %d more", len(m.queueList)-visibleItems)))
 	}
 
 	return b.String()
@@ -358,7 +340,7 @@ func (m Model) renderQueue() string {
 // renderCompleted renders the completed downloads
 func (m Model) renderCompleted() string {
 	if len(m.completedList) == 0 {
-		return mutedStyle.Render("\nNo completed downloads")
+		return theme.MutedStyle.Render("\nNo completed downloads")
 	}
 
 	var b strings.Builder
@@ -397,7 +379,7 @@ func (m Model) renderCompleted() string {
 		line := fmt.Sprintf("✓ %s - %s  %s",
 			item.MangaTitle,
 			item.ChapterName,
-			mutedStyle.Render(timeStr),
+			theme.MutedStyle.Render(timeStr),
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -405,7 +387,7 @@ func (m Model) renderCompleted() string {
 	}
 
 	if len(m.completedList) > visibleItems {
-		b.WriteString(mutedStyle.Render(fmt.Sprintf("\n... and %d more", len(m.completedList)-visibleItems)))
+		b.WriteString(theme.MutedStyle.Render(fmt.Sprintf("\n... and %d more", len(m.completedList)-visibleItems)))
 	}
 
 	return b.String()
@@ -429,7 +411,7 @@ func (m Model) renderProgressBar(progress float64) string {
 	}
 	bar += "]"
 
-	return successStyle.Render(fmt.Sprintf("%s %3.0f%%", bar, progress))
+	return theme.SuccessStyle.Render(fmt.Sprintf("%s %3.0f%%", bar, progress))
 }
 
 // renderFooter renders the footer with controls
@@ -446,7 +428,7 @@ func (m Model) renderFooter() string {
 		"Esc: back",
 	}
 
-	return helpStyle.Render(strings.Join(controls, " • "))
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
 }
 
 // getMaxCursor returns the maximum cursor position for the current tab
@@ -478,7 +460,7 @@ type refreshDataMsg struct {
 	active    []*downloads.DownloadItem
 	queue     []*downloads.DownloadItem
 	completed []*downloads.DownloadItem
-	stats     downloads.DownloadStats
+	stats     *downloads.DownloadStats
 }
 
 type tickMsg struct{}
@@ -486,10 +468,11 @@ type tickMsg struct{}
 // Commands
 
 func (m Model) refreshData() tea.Msg {
+	stats := m.manager.GetStats()
 	return refreshDataMsg{
 		active:    m.manager.GetActive(),
 		queue:     m.manager.GetQueue(),
 		completed: m.manager.GetCompleted(),
-		stats:     m.manager.GetStats(),
+		stats:     &stats,
 	}
 }

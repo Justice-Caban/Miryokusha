@@ -1,11 +1,11 @@
 package extensions
 
 import (
-	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 
 	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -16,27 +16,6 @@ type ViewMode int
 const (
 	ModeBrowse ViewMode = iota
 	ModeInstalled
-)
-
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	statusStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorAccent).
-			Bold(true)
-
-	nsfwStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorWarning).
-			Bold(true)
 )
 
 // Model represents the extensions view model
@@ -280,11 +259,11 @@ func (m *Model) adjustOffset() {
 // View renders the extensions view
 func (m Model) View() string {
 	if m.loading {
-		return centeredText(m.width, m.height, "Loading extensions...")
+		return theme.CenteredText(m.width, m.height, "Loading extensions...")
 	}
 
 	if m.err != nil {
-		return centeredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
+		return theme.CenteredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
 	}
 
 	var b strings.Builder
@@ -319,7 +298,7 @@ func (m Model) renderHeader() string {
 		modeStr = "Installed Extensions"
 	}
 
-	title := titleStyle.Render(modeStr)
+	title := theme.TitleStyle.Render(modeStr)
 
 	// Filters info
 	filters := []string{
@@ -357,9 +336,9 @@ func (m Model) renderBrowse() string {
 
 	if len(filtered) == 0 {
 		if len(m.available) == 0 {
-			return centeredText(m.width, m.height-10, "No extensions available\n\nCheck your connection to Suwayomi server")
+			return theme.CenteredText(m.width, m.height-10, "No extensions available\n\nCheck your connection to Suwayomi server")
 		}
-		return centeredText(m.width, m.height-10, "No extensions match current filters")
+		return theme.CenteredText(m.width, m.height-10, "No extensions match current filters")
 	}
 
 	var b strings.Builder
@@ -392,7 +371,7 @@ func (m Model) renderBrowse() string {
 		statusIndicator := ""
 		if ext.IsInstalled {
 			if ext.HasUpdate {
-				statusIndicator = statusStyle.Render("[UPDATE]")
+				statusIndicator = theme.ValueStyle.Render("[UPDATE]")
 			} else {
 				statusIndicator = lipgloss.NewStyle().Foreground(theme.ColorSuccess).Render("[✓]")
 			}
@@ -403,7 +382,7 @@ func (m Model) renderBrowse() string {
 		// NSFW indicator
 		nsfwIndicator := ""
 		if ext.IsNSFW {
-			nsfwIndicator = nsfwStyle.Render("[NSFW]")
+			nsfwIndicator = theme.WarningStyle.Render("[NSFW]")
 		}
 
 		// Language badge
@@ -416,7 +395,7 @@ func (m Model) renderBrowse() string {
 			ext.Name,
 			langBadge,
 			nsfwIndicator,
-			ext.Version,
+			ext.VersionName,
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -432,9 +411,9 @@ func (m Model) renderInstalled() string {
 
 	if len(filtered) == 0 {
 		if len(m.installed) == 0 {
-			return centeredText(m.width, m.height-10, "No extensions installed\n\nSwitch to Browse mode to install extensions")
+			return theme.CenteredText(m.width, m.height-10, "No extensions installed\n\nSwitch to Browse mode to install extensions")
 		}
-		return centeredText(m.width, m.height-10, "No installed extensions match current filters")
+		return theme.CenteredText(m.width, m.height-10, "No installed extensions match current filters")
 	}
 
 	var b strings.Builder
@@ -466,7 +445,7 @@ func (m Model) renderInstalled() string {
 		// Status
 		status := ""
 		if ext.HasUpdate {
-			status = statusStyle.Render("[UPDATE]")
+			status = theme.ValueStyle.Render("[UPDATE]")
 		} else if ext.IsObsolete {
 			status = lipgloss.NewStyle().Foreground(theme.ColorWarning).Render("[OBSOLETE]")
 		} else {
@@ -476,7 +455,7 @@ func (m Model) renderInstalled() string {
 		// NSFW indicator
 		nsfwIndicator := ""
 		if ext.IsNSFW {
-			nsfwIndicator = nsfwStyle.Render("[NSFW]")
+			nsfwIndicator = theme.WarningStyle.Render("[NSFW]")
 		}
 
 		// Language badge
@@ -489,7 +468,7 @@ func (m Model) renderInstalled() string {
 			ext.Name,
 			langBadge,
 			nsfwIndicator,
-			ext.Version,
+			ext.VersionName,
 		)
 
 		b.WriteString(itemStyle.Render(line))
@@ -518,16 +497,7 @@ func (m Model) renderFooter() string {
 
 	controls = append(controls, "r: refresh", "Esc: back")
 
-	return helpStyle.Render(strings.Join(controls, " • "))
-}
-
-// centeredText centers text in the given width and height
-func centeredText(width, height int, text string) string {
-	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Align(lipgloss.Center, lipgloss.Center)
-	return style.Render(text)
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
 }
 
 // Messages
@@ -597,16 +567,16 @@ func (m Model) toggleInstall() tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		if ext.IsInstalled {
-			err = m.client.UninstallExtension(ext.PackageName)
+			err = m.client.UninstallExtension(ext.PkgName)
 		} else {
-			err = m.client.InstallExtension(ext.PackageName)
+			err = m.client.InstallExtension(ext.PkgName)
 		}
 
 		if err != nil {
 			return extensionErrorMsg{err: err}
 		}
 
-		return extensionInstalledMsg{packageName: ext.PackageName}
+		return extensionInstalledMsg{packageName: ext.PkgName}
 	}
 }
 
@@ -626,11 +596,11 @@ func (m Model) updateExtension() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		err := m.client.UpdateExtension(ext.PackageName)
+		err := m.client.UpdateExtension(ext.PkgName)
 		if err != nil {
 			return extensionErrorMsg{err: err}
 		}
-		return extensionInstalledMsg{packageName: ext.PackageName}
+		return extensionInstalledMsg{packageName: ext.PkgName}
 	}
 }
 
@@ -653,7 +623,7 @@ func (m Model) updateAll() tea.Cmd {
 
 	return func() tea.Msg {
 		for _, ext := range toUpdate {
-			err := m.client.UpdateExtension(ext.PackageName)
+			err := m.client.UpdateExtension(ext.PkgName)
 			if err != nil {
 				return extensionErrorMsg{err: err}
 			}

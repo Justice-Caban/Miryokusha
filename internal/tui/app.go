@@ -192,16 +192,54 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case history.OpenChapterMsg:
 		// Launch reader from history by loading manga and chapter from source
-		// For now, create a minimal manga/chapter to launch reader
-		// TODO: Fetch full manga/chapter details from source
-		manga := &source.Manga{
-			ID:         msg.MangaID,
-			SourceType: source.SourceTypeSuwayomi, // TODO: Get from history entry
+		// Try to fetch full details from source
+		var manga *source.Manga
+		var chapter *source.Chapter
+
+		// Get source for this manga
+		src := m.sourceManager.GetSource(msg.MangaID)
+		if src == nil {
+			// Try to find a source by type (assume Suwayomi for now)
+			sources := m.sourceManager.GetSourcesByType(source.SourceTypeSuwayomi)
+			if len(sources) > 0 {
+				src = sources[0]
+			}
 		}
-		chapter := &source.Chapter{
-			ID:      msg.ChapterID,
-			MangaID: msg.MangaID,
+
+		if src != nil {
+			// Fetch full manga details
+			fetchedManga, err := src.GetManga(msg.MangaID)
+			if err == nil && fetchedManga != nil {
+				manga = fetchedManga
+			}
+
+			// Fetch chapters and find the specific one
+			chapters, err := src.ListChapters(msg.MangaID)
+			if err == nil {
+				for _, ch := range chapters {
+					if ch.ID == msg.ChapterID {
+						chapter = ch
+						break
+					}
+				}
+			}
 		}
+
+		// Fallback to minimal objects if fetch failed
+		if manga == nil {
+			manga = &source.Manga{
+				ID:         msg.MangaID,
+				Title:      msg.MangaTitle, // Use cached title from history
+				SourceType: source.SourceTypeSuwayomi,
+			}
+		}
+		if chapter == nil {
+			chapter = &source.Chapter{
+				ID:      msg.ChapterID,
+				MangaID: msg.MangaID,
+			}
+		}
+
 		readerModel := reader.NewModel(manga, chapter, m.sourceManager, m.storage)
 		m.readerModel = &readerModel
 		m.currentView = ViewReader
