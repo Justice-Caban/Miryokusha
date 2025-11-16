@@ -1,13 +1,13 @@
 package reader
 
 import (
-	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -19,26 +19,6 @@ const (
 	ModeSinglePage ReadingMode = iota
 	ModeDoublePage
 	ModeWebtoon
-)
-
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	pageInfoStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorAccent).
-			Bold(true)
-
-	chapterInfoStyle = lipgloss.NewStyle().
-				Foreground(theme.ColorSecondary)
 )
 
 // Model represents the manga reader model
@@ -298,15 +278,15 @@ func (m Model) toggleBookmark() (Model, tea.Cmd) {
 // View renders the reader view
 func (m Model) View() string {
 	if m.loading {
-		return centeredText(m.width, m.height, "Loading chapter...")
+		return theme.CenteredText(m.width, m.height, "Loading chapter...")
 	}
 
 	if m.err != nil {
-		return centeredText(m.width, m.height, fmt.Sprintf("Error: %v\n\nPress ESC to go back", m.err))
+		return theme.CenteredText(m.width, m.height, fmt.Sprintf("Error: %v\n\nPress ESC to go back", m.err))
 	}
 
 	if len(m.pages) == 0 {
-		return centeredText(m.width, m.height, "No pages available\n\nPress ESC to go back")
+		return theme.CenteredText(m.width, m.height, "No pages available\n\nPress ESC to go back")
 	}
 
 	var b strings.Builder
@@ -332,14 +312,14 @@ func (m Model) View() string {
 
 // renderHeader renders the chapter and page information
 func (m Model) renderHeader() string {
-	title := chapterInfoStyle.Render(m.manga.Title)
+	title := theme.MutedStyle.Render(m.manga.Title)
 	chapterInfo := fmt.Sprintf("Chapter %.1f", m.chapter.ChapterNumber)
 	if m.chapter.Title != "" {
 		chapterInfo += fmt.Sprintf(": %s", m.chapter.Title)
 	}
-	chapter := chapterInfoStyle.Render(chapterInfo)
+	chapter := theme.MutedStyle.Render(chapterInfo)
 
-	pageInfo := pageInfoStyle.Render(fmt.Sprintf("Page %d / %d", m.currentPage+1, len(m.pages)))
+	pageInfo := theme.ValueStyle.Render(fmt.Sprintf("Page %d / %d", m.currentPage+1, len(m.pages)))
 
 	// Reading mode indicator
 	modeStr := ""
@@ -382,7 +362,7 @@ func (m Model) renderPage() string {
 // renderSinglePage renders a single page
 func (m Model) renderSinglePage() string {
 	if m.currentPage >= len(m.pages) {
-		return centeredText(m.width, m.height-10, "Invalid page")
+		return theme.CenteredText(m.width, m.height-10, "Invalid page")
 	}
 
 	page := m.pages[m.currentPage]
@@ -417,7 +397,7 @@ func (m Model) renderDoublePage() string {
 	rightPage := m.currentPage + 1
 
 	if leftPage >= len(m.pages) {
-		return centeredText(m.width, m.height-10, "Invalid page")
+		return theme.CenteredText(m.width, m.height-10, "Invalid page")
 	}
 
 	leftPlaceholder := fmt.Sprintf("[Page %d]", leftPage+1)
@@ -482,7 +462,7 @@ func (m Model) renderFooter() string {
 	// Progress indicator
 	progressBar := m.renderProgressBar()
 
-	return helpStyle.Render(strings.Join(controls, " • ")) + "\n" + progressBar
+	return theme.HelpStyle.Render(strings.Join(controls, " • ")) + "\n" + progressBar
 }
 
 // renderProgressBar renders a progress bar
@@ -511,14 +491,6 @@ func (m Model) renderProgressBar() string {
 	)
 }
 
-// centeredText centers text in the given width and height
-func centeredText(width, height int, text string) string {
-	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Align(lipgloss.Center, lipgloss.Center)
-	return style.Render(text)
-}
 
 // SaveSession saves the reading session
 func (m *Model) SaveSession() {

@@ -1,13 +1,13 @@
 package history
 
 import (
-	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -19,27 +19,6 @@ const (
 	ModeHistory ViewMode = iota
 	ModeContinueReading
 	ModeStatistics
-)
-
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	sectionHeaderStyle = lipgloss.NewStyle().
-				Foreground(theme.ColorSecondary).
-				Bold(true)
-
-	statStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorAccent).
-			Bold(true)
 )
 
 // Model represents the history view model
@@ -194,11 +173,11 @@ func (m *Model) adjustOffset() {
 // View renders the history view
 func (m Model) View() string {
 	if m.loading {
-		return centeredText(m.width, m.height, "Loading history...")
+		return theme.CenteredText(m.width, m.height, "Loading history...")
 	}
 
 	if m.err != nil {
-		return centeredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
+		return theme.CenteredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
 	}
 
 	var b strings.Builder
@@ -237,7 +216,7 @@ func (m Model) renderHeader() string {
 		modeStr = "Statistics"
 	}
 
-	title := titleStyle.Render(modeStr)
+	title := theme.TitleStyle.Render(modeStr)
 
 	info := lipgloss.NewStyle().
 		Foreground(theme.ColorMuted).
@@ -249,7 +228,7 @@ func (m Model) renderHeader() string {
 // renderHistory renders the reading history
 func (m Model) renderHistory() string {
 	if len(m.history) == 0 {
-		return centeredText(m.width, m.height-10, "No reading history\n\nStart reading manga to build your history")
+		return theme.CenteredText(m.width, m.height-10, "No reading history\n\nStart reading manga to build your history")
 	}
 
 	var b strings.Builder
@@ -265,7 +244,7 @@ func (m Model) renderHistory() string {
 	currentIndex := 0
 	for _, group := range grouped {
 		// Section header
-		b.WriteString(sectionHeaderStyle.Render(group.label))
+		b.WriteString(theme.SectionStyle.Render(group.label))
 		b.WriteString("\n")
 
 		for _, entry := range group.entries {
@@ -356,7 +335,7 @@ func (m Model) groupHistoryByTime() []historyGroup {
 // renderContinueReading renders the continue reading list
 func (m Model) renderContinueReading() string {
 	if len(m.continueReading) == 0 {
-		return centeredText(m.width, m.height-10, "No chapters in progress\n\nStart reading to see your progress here")
+		return theme.CenteredText(m.width, m.height-10, "No chapters in progress\n\nStart reading to see your progress here")
 	}
 
 	var b strings.Builder
@@ -416,13 +395,13 @@ func (m Model) renderContinueReading() string {
 // renderStatistics renders reading statistics
 func (m Model) renderStatistics() string {
 	if m.stats == nil {
-		return centeredText(m.width, m.height-10, "No statistics available")
+		return theme.CenteredText(m.width, m.height-10, "No statistics available")
 	}
 
 	var b strings.Builder
 
 	// Overall stats
-	b.WriteString(sectionHeaderStyle.Render("Overall Statistics"))
+	b.WriteString(theme.SectionStyle.Render("Overall Statistics"))
 	b.WriteString("\n\n")
 
 	statsData := []struct {
@@ -439,14 +418,14 @@ func (m Model) renderStatistics() string {
 	for _, stat := range statsData {
 		b.WriteString(fmt.Sprintf("  %s: %s\n",
 			stat.label,
-			statStyle.Render(stat.value),
+			theme.ValueStyle.Render(stat.value),
 		))
 	}
 
 	b.WriteString("\n")
 
 	// Streaks
-	b.WriteString(sectionHeaderStyle.Render("Reading Streaks"))
+	b.WriteString(theme.SectionStyle.Render("Reading Streaks"))
 	b.WriteString("\n\n")
 
 	currentStreakIcon := ""
@@ -455,12 +434,12 @@ func (m Model) renderStatistics() string {
 	}
 
 	b.WriteString(fmt.Sprintf("  Current Streak: %s %s\n",
-		statStyle.Render(fmt.Sprintf("%d days", m.stats.CurrentStreak)),
+		theme.ValueStyle.Render(fmt.Sprintf("%d days", m.stats.CurrentStreak)),
 		currentStreakIcon,
 	))
 
 	b.WriteString(fmt.Sprintf("  Longest Streak: %s 🏆\n",
-		statStyle.Render(fmt.Sprintf("%d days", m.stats.LongestReadingStreak)),
+		theme.ValueStyle.Render(fmt.Sprintf("%d days", m.stats.LongestReadingStreak)),
 	))
 
 	return b.String()
@@ -499,17 +478,9 @@ func (m Model) renderFooter() string {
 
 	controls = append(controls, "Esc: back")
 
-	return helpStyle.Render(strings.Join(controls, " • "))
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
 }
 
-// centeredText centers text in the given width and height
-func centeredText(width, height int, text string) string {
-	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Align(lipgloss.Center, lipgloss.Center)
-	return style.Render(text)
-}
 
 // formatTimeSince formats a duration since a time
 func formatTimeSince(t time.Time) string {

@@ -10,45 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	sectionStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorSecondary).
-			MarginTop(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	selectedStyle = lipgloss.NewStyle().
-			Background(theme.ColorPrimary).
-			Foreground(lipgloss.Color("#000000")).
-			Bold(true).
-			PaddingLeft(1).
-			PaddingRight(1)
-
-	normalStyle = lipgloss.NewStyle().
-			PaddingLeft(1).
-			PaddingRight(1)
-
-	mutedStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted)
-
-	successStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorSuccess).
-			Bold(true)
-
-	errorStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorError).
-			Bold(true)
-)
-
 // ViewMode represents the current view mode
 type ViewMode string
 
@@ -249,7 +210,7 @@ func (m Model) View() string {
 	var b strings.Builder
 
 	// Header
-	b.WriteString(titleStyle.Render("📂 Categories"))
+	b.WriteString(theme.TitleStyle.Render("📂 Categories"))
 	b.WriteString("\n\n")
 
 	// Show different views based on mode
@@ -265,9 +226,9 @@ func (m Model) View() string {
 	if m.message != "" {
 		b.WriteString("\n")
 		if m.messageType == "error" {
-			b.WriteString(errorStyle.Render(m.message))
+			b.WriteString(theme.ErrorStyle.Render(m.message))
 		} else if m.messageType == "success" {
-			b.WriteString(successStyle.Render(m.message))
+			b.WriteString(theme.SuccessStyle.Render(m.message))
 		} else {
 			b.WriteString(m.message)
 		}
@@ -286,7 +247,7 @@ func (m Model) renderCategoryList() string {
 	var b strings.Builder
 
 	if len(m.categories) == 0 {
-		b.WriteString(mutedStyle.Render("No categories yet. Press 'n' to create one."))
+		b.WriteString(theme.MutedStyle.Render("No categories yet. Press 'n' to create one."))
 		return b.String()
 	}
 
@@ -303,9 +264,9 @@ func (m Model) renderCategoryList() string {
 
 		// Apply style
 		if isCursor {
-			b.WriteString(selectedStyle.Render(line))
+			b.WriteString(theme.HighlightStyle.Render(line))
 		} else {
-			b.WriteString(normalStyle.Render(line))
+			b.WriteString(lipgloss.NewStyle().Render(line))
 		}
 		b.WriteString("\n")
 	}
@@ -318,9 +279,9 @@ func (m Model) renderCategoryInput() string {
 	var b strings.Builder
 
 	if m.viewMode == ViewModeCreate {
-		b.WriteString(sectionStyle.Render("Create New Category"))
+		b.WriteString(theme.SectionStyle.Render("Create New Category"))
 	} else {
-		b.WriteString(sectionStyle.Render("Edit Category"))
+		b.WriteString(theme.SectionStyle.Render("Edit Category"))
 	}
 	b.WriteString("\n\n")
 
@@ -338,7 +299,7 @@ func (m Model) renderCategoryInput() string {
 		b.WriteString("[ ] Set as default category")
 	}
 	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("(Press Tab to toggle)"))
+	b.WriteString(theme.MutedStyle.Render("(Press Tab to toggle)"))
 
 	return b.String()
 }
@@ -365,7 +326,7 @@ func (m Model) renderFooter() string {
 		}
 	}
 
-	return helpStyle.Render(strings.Join(controls, " • "))
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
 }
 
 // Messages

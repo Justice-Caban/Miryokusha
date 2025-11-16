@@ -117,3 +117,12 @@ func RenderBadge(text string, style lipgloss.Style) string {
 func RenderSection(title, content string) string {
 	return SectionStyle.Render(title) + "\n" + content
 }
+
+// CenteredText centers text in the given width and height
+func CenteredText(width, height int, text string) string {
+	style := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Align(lipgloss.Center, lipgloss.Center)
+	return style.Render(text)
+}

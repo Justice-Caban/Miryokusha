@@ -11,30 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(theme.ColorPrimary).
-			MarginBottom(1)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted).
-			MarginTop(1)
-
-	mutedStyle = lipgloss.NewStyle().
-			Foreground(theme.ColorMuted)
-)
-
-// centeredText centers text in the given width and height
-func centeredText(width, height int, text string) string {
-	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Align(lipgloss.Center, lipgloss.Center)
-	return style.Render(text)
-}
-
 // SortMode represents how the library is sorted
 type SortMode int
 
@@ -332,15 +308,15 @@ func (m *Model) sortByDateAdded() {
 // View renders the library view
 func (m Model) View() string {
 	if m.loading {
-		return centeredText(m.width, m.height, "Loading library...")
+		return theme.CenteredText(m.width, m.height, "Loading library...")
 	}
 
 	if m.err != nil {
-		return centeredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
+		return theme.CenteredText(m.width, m.height, fmt.Sprintf("Error: %v", m.err))
 	}
 
 	if len(m.manga) == 0 {
-		return centeredText(m.width, m.height, "No manga found\n\nPress 'r' to refresh")
+		return theme.CenteredText(m.width, m.height, "No manga found\n\nPress 'r' to refresh")
 	}
 
 	var b strings.Builder
@@ -361,7 +337,7 @@ func (m Model) View() string {
 
 // renderHeader renders the library header
 func (m Model) renderHeader() string {
-	title := titleStyle.Render("Library")
+	title := theme.TitleStyle.Render("Library")
 
 	// Sort mode indicator
 	sortModeStr := ""
@@ -411,7 +387,7 @@ func (m Model) renderHeader() string {
 // renderMangaList renders the list of manga
 func (m Model) renderMangaList() string {
 	if len(m.filteredList) == 0 {
-		return mutedStyle.Render("No manga match current filters")
+		return theme.MutedStyle.Render("No manga match current filters")
 	}
 
 	var b strings.Builder
@@ -483,7 +459,7 @@ func (m Model) renderFooter() string {
 		"Esc: back",
 	}
 
-	return helpStyle.Render(strings.Join(controls, " • "))
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
 }
 
 // Messages
