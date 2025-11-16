@@ -57,7 +57,7 @@ type Model struct {
 	activeList    []*downloads.DownloadItem
 	queueList     []*downloads.DownloadItem
 	completedList []*downloads.DownloadItem
-	stats         downloads.DownloadStats
+	stats         *downloads.DownloadStats
 
 	// Refresh ticker
 	lastRefresh time.Time
@@ -94,7 +94,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.activeList = msg.active
 		m.queueList = msg.queue
 		m.completedList = msg.completed
-		m.stats = msg.stats
+		if msg.stats != nil {
+			m.stats = msg.stats
+		}
 		m.lastRefresh = time.Now()
 
 		// Auto-refresh every second
@@ -215,14 +217,24 @@ func (m Model) View() string {
 func (m Model) renderHeader() string {
 	title := titleStyle.Render("Downloads")
 
+	activeDownloads := 0
+	completedDownloads := 0
+	failedDownloads := 0
+
+	if m.stats != nil {
+		activeDownloads = m.stats.ActiveDownloads
+		completedDownloads = m.stats.CompletedDownloads
+		failedDownloads = m.stats.FailedDownloads
+	}
+
 	info := lipgloss.NewStyle().
 		Foreground(theme.ColorSecondary).
 		Render(fmt.Sprintf(
 			"Active: %d | Queued: %d | Completed: %d | Failed: %d",
-			m.stats.ActiveDownloads,
+			activeDownloads,
 			len(m.queueList),
-			m.stats.CompletedDownloads,
-			m.stats.FailedDownloads,
+			completedDownloads,
+			failedDownloads,
 		))
 
 	return title + "\n" + info
@@ -478,7 +490,7 @@ type refreshDataMsg struct {
 	active    []*downloads.DownloadItem
 	queue     []*downloads.DownloadItem
 	completed []*downloads.DownloadItem
-	stats     downloads.DownloadStats
+	stats     *downloads.DownloadStats
 }
 
 type tickMsg struct{}
@@ -486,10 +498,11 @@ type tickMsg struct{}
 // Commands
 
 func (m Model) refreshData() tea.Msg {
+	stats := m.manager.GetStats()
 	return refreshDataMsg{
 		active:    m.manager.GetActive(),
 		queue:     m.manager.GetQueue(),
 		completed: m.manager.GetCompleted(),
-		stats:     m.manager.GetStats(),
+		stats:     &stats,
 	}
 }
