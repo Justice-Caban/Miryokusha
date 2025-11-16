@@ -34,6 +34,7 @@ type ExtensionSource struct {
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
+	GraphQL    *GraphQLClient
 }
 
 // NewClient creates a new Suwayomi client
@@ -46,12 +47,17 @@ func NewClient(baseURL string) *Client {
 	// Remove trailing slash
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
-	return &Client{
+	client := &Client{
 		BaseURL: baseURL,
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
+
+	// Initialize GraphQL client
+	client.GraphQL = NewGraphQLClient(client)
+
+	return client
 }
 
 // ListAvailableExtensions lists all available extensions from the repository

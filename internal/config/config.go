@@ -92,6 +92,8 @@ func Save(config *Config) error {
 	viper.Set("servers", config.Servers)
 	viper.Set("preferences", config.Preferences)
 	viper.Set("paths", config.Paths)
+	viper.Set("updates", config.Updates)
+	viper.Set("server_management", config.ServerManagement)
 
 	// Write config file
 	if err := viper.WriteConfigAs(configPath); err != nil {
