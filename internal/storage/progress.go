@@ -140,7 +140,7 @@ func (pm *ProgressManager) GetInProgressChapters() ([]*ProgressEntry, error) {
 func (pm *ProgressManager) MarkAsCompleted(mangaID, chapterID string, totalPages int) error {
 	query := `
 		INSERT INTO reading_progress (manga_id, manga_title, chapter_id, current_page, total_pages, is_completed, last_read_at)
-		VALUES (?, ?, ?, ?, TRUE, ?)
+		VALUES (?, '', ?, ?, ?, TRUE, ?)
 		ON CONFLICT(manga_id, chapter_id)
 		DO UPDATE SET
 			current_page = excluded.total_pages,
