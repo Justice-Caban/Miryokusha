@@ -257,7 +257,12 @@ func (m *Model) applyFiltersAndSort() {
 	switch m.sortMode {
 	case SortAlphabetical:
 		m.sortAlphabetically()
-	// TODO: Implement other sort modes when we have more metadata
+	case SortLastRead:
+		m.sortByLastRead()
+	case SortUnreadCount:
+		m.sortByUnreadCount()
+	case SortDateAdded:
+		m.sortByDateAdded()
 	}
 
 	// Reset cursor if out of bounds
@@ -275,6 +280,49 @@ func (m *Model) sortAlphabetically() {
 	for i := 0; i < len(m.filteredList); i++ {
 		for j := i + 1; j < len(m.filteredList); j++ {
 			if m.filteredList[i].Title > m.filteredList[j].Title {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			}
+		}
+	}
+}
+
+// sortByLastRead sorts manga by last read time (most recent first)
+func (m *Model) sortByLastRead() {
+	for i := 0; i < len(m.filteredList); i++ {
+		for j := i + 1; j < len(m.filteredList); j++ {
+			iTime := m.filteredList[i].LastReadAt
+			jTime := m.filteredList[j].LastReadAt
+
+			// nil times go to the end
+			if iTime == nil && jTime != nil {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			} else if iTime != nil && jTime != nil && iTime.Before(*jTime) {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			}
+		}
+	}
+}
+
+// sortByUnreadCount sorts manga by unread chapter count (most unread first)
+func (m *Model) sortByUnreadCount() {
+	for i := 0; i < len(m.filteredList); i++ {
+		for j := i + 1; j < len(m.filteredList); j++ {
+			if m.filteredList[i].UnreadCount < m.filteredList[j].UnreadCount {
+				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
+			}
+		}
+	}
+}
+
+// sortByDateAdded sorts manga by when they were added to library (newest first)
+// Note: This requires tracking when manga was added - for now, use ID as proxy
+func (m *Model) sortByDateAdded() {
+	// For manga from Suwayomi, higher IDs are typically newer additions
+	// For local manga, sort alphabetically as fallback
+	for i := 0; i < len(m.filteredList); i++ {
+		for j := i + 1; j < len(m.filteredList); j++ {
+			// Try to sort by ID descending (newer first)
+			if m.filteredList[i].ID < m.filteredList[j].ID {
 				m.filteredList[i], m.filteredList[j] = m.filteredList[j], m.filteredList[i]
 			}
 		}

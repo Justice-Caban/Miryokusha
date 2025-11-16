@@ -353,7 +353,13 @@ func (u *Updater) filterManga(allManga []*source.Manga) []*source.Manga {
 			}
 		}
 
-		// TODO: Implement completed filter when manga status is available
+		// Check if manga is completed (if UpdateOnlyCompleted is true)
+		if u.config.UpdateOnlyCompleted && u.storage != nil && u.storage.UpdateTracking != nil {
+			tracking, err := u.storage.UpdateTracking.GetTracking(manga.ID)
+			if err != nil || tracking == nil || !tracking.IsCompleted {
+				continue // Skip manga that isn't marked as completed
+			}
+		}
 
 		filtered = append(filtered, manga)
 	}
