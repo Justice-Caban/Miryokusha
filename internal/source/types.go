@@ -158,3 +158,39 @@ func (sm *SourceManager) SearchAllSources(query string) ([]*Manga, error) {
 	}
 	return results, nil
 }
+
+// GetAllPages retrieves all pages for a chapter from its source
+func (sm *SourceManager) GetAllPages(chapterID string) ([]*Page, error) {
+	// Try each source until we find one that has this chapter
+	for _, source := range sm.sources {
+		if !source.IsAvailable() {
+			continue
+		}
+		pages, err := source.GetAllPages(chapterID)
+		if err == nil && pages != nil {
+			return pages, nil
+		}
+	}
+	return nil, nil
+}
+
+// GetPage retrieves a specific page from a chapter
+func (sm *SourceManager) GetPage(chapterID string, pageIndex int) ([]byte, error) {
+	// Try each source until we find one that has this chapter
+	for _, source := range sm.sources {
+		if !source.IsAvailable() {
+			continue
+		}
+		page, err := source.GetPage(chapterID, pageIndex)
+		if err == nil && page != nil {
+			// If ImageData is already loaded, return it
+			if len(page.ImageData) > 0 {
+				return page.ImageData, nil
+			}
+			// Otherwise, would need to fetch from URL
+			// For now, return empty if only URL is available
+			return page.ImageData, nil
+		}
+	}
+	return nil, nil
+}

@@ -1,0 +1,50 @@
+# Miryokusha Configuration Example
+# Copy this file to ~/.config/miryokusha/config.yaml and customize
+
+# Suwayomi Server Configuration
+servers:
+  - name: "Local Server"
+    url: "http://localhost:4567"
+    default: true
+    # Optional authentication
+    # auth:
+    #   type: "basic"
+    #   username: "admin"
+    #   password: "password"
+
+# Server Process Management
+# This allows Miryokusha to start/stop the Suwayomi server for you
+server_management:
+  enabled: false  # Set to true to enable server management
+  executable_path: ""  # Path to Suwayomi JAR file, e.g., "/path/to/Suwayomi-Server-v1.0.0.jar"
+  args: []  # Additional arguments to pass to the server
+  work_dir: ""  # Working directory for the server (optional)
+  auto_start: false  # Automatically start server when Miryokusha launches
+
+  # Example configurations:
+  # For JAR file:
+  # executable_path: "/home/user/suwayomi/Suwayomi-Server-v1.0.0.jar"
+  # args: ["--server.port=4567"]
+  # work_dir: "/home/user/suwayomi"
+  # auto_start: true
+
+  # For Docker (not directly supported, use wrapper script):
+  # Create a script that runs: docker start suwayomi-server
+  # executable_path: "/home/user/scripts/start-suwayomi.sh"
+  # auto_start: true
+
+# User Preferences
+preferences:
+  theme: "dark"  # "dark" or "light"
+  default_server: 0  # Index of default server (0-based)
+  cache_size_mb: 500
+  auto_mark_read: true
+  reading_mode: "single"  # "single", "double", "webtoon"
+  local_scan_dirs: []
+  show_thumbnails: true
+
+# Paths Configuration
+paths:
+  database: ""  # Leave empty for default: ~/.config/miryokusha/miryokusha.db
+  cache: ""  # Leave empty for default: ~/.cache/miryokusha
+  downloads: ""  # Leave empty for default: ~/.local/share/miryokusha/downloads

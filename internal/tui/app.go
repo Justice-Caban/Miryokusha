@@ -4,9 +4,18 @@ import (
 	"fmt"
 
 	"github.com/Justice-Caban/Miryokusha/internal/config"
+	"github.com/Justice-Caban/Miryokusha/internal/downloads"
+	"github.com/Justice-Caban/Miryokusha/internal/server"
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/suwayomi"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/categories"
+	tuiDownloads "github.com/Justice-Caban/Miryokusha/internal/tui/downloads"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/extensions"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/reader"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/settings"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -17,11 +26,13 @@ type ViewType string
 const (
 	ViewHome       ViewType = "home"
 	ViewLibrary    ViewType = "library"
+	ViewReader     ViewType = "reader"
 	ViewHistory    ViewType = "history"
 	ViewBrowse     ViewType = "browse"
 	ViewDownloads  ViewType = "downloads"
 	ViewExtensions ViewType = "extensions"
 	ViewSettings   ViewType = "settings"
+	ViewCategories ViewType = "categories"
 )
 
 // AppModel is the root model for the entire TUI application
@@ -33,12 +44,23 @@ type AppModel struct {
 	err         error
 
 	// Dependencies
-	config        *config.Config
-	sourceManager *source.SourceManager
-	storage       *storage.Storage
+	config          *config.Config
+	sourceManager   *source.SourceManager
+	storage         *storage.Storage
+	downloadManager *downloads.Manager
+	serverManager   *server.Manager
 
 	// View models
-	libraryModel library.Model
+	libraryModel     library.Model
+	historyModel     history.Model
+	extensionsModel  extensions.Model
+	downloadsModel   tuiDownloads.Model
+	settingsModel    settings.Model
+	categoriesModel  categories.Model
+	readerModel      *reader.Model
+
+	// Suwayomi client
+	suwayomiClient *suwayomi.Client
 }
 
 // NewAppModel creates a new application model
@@ -60,15 +82,66 @@ func NewAppModel() AppModel {
 	// Initialize source manager
 	sm := source.NewSourceManager()
 
+	// Initialize Suwayomi client if server configured
+	var suwayomiClient *suwayomi.Client
+	if defaultServer := cfg.GetDefaultServer(); defaultServer != nil {
+		suwayomiClient = suwayomi.NewClient(defaultServer.URL)
+	}
+
 	// Initialize library model
 	libModel := library.NewModel(sm, st)
 
+	// Initialize history model
+	histModel := history.NewModel(sm, st)
+
+	// Initialize extensions model
+	extModel := extensions.NewModel(suwayomiClient)
+
+	// Initialize download manager
+	downloadConfig := downloads.DefaultDownloadConfig()
+	downloadMgr := downloads.NewManager(downloadConfig, sm)
+	downloadMgr.Start() // Auto-start the download manager
+
+	// Initialize downloads model
+	dlModel := tuiDownloads.NewModel(downloadMgr)
+
+	// Initialize server manager if enabled
+	var serverMgr *server.Manager
+	if cfg.ServerManagement.Enabled {
+		serverConfig := &server.ManagerConfig{
+			ExecutablePath: cfg.ServerManagement.ExecutablePath,
+			Args:           cfg.ServerManagement.Args,
+			WorkDir:        cfg.ServerManagement.WorkDir,
+			MaxLogs:        1000,
+		}
+		serverMgr = server.NewManager(serverConfig)
+
+		// Auto-start if configured
+		if cfg.ServerManagement.AutoStart {
+			_ = serverMgr.Start()
+		}
+	}
+
+	// Initialize settings model
+	settingsModel := settings.NewModel(cfg, suwayomiClient, serverMgr)
+
+	// Initialize categories model
+	categoriesModel := categories.NewModel(st)
+
 	return AppModel{
-		currentView:   ViewHome,
-		config:        cfg,
-		sourceManager: sm,
-		storage:       st,
-		libraryModel:  libModel,
+		currentView:      ViewHome,
+		config:           cfg,
+		sourceManager:    sm,
+		storage:          st,
+		downloadManager:  downloadMgr,
+		serverManager:    serverMgr,
+		suwayomiClient:   suwayomiClient,
+		libraryModel:     libModel,
+		historyModel:     histModel,
+		extensionsModel:  extModel,
+		downloadsModel:   dlModel,
+		settingsModel:    settingsModel,
+		categoriesModel:  categoriesModel,
 	}
 }
 
@@ -77,63 +150,115 @@ func (m AppModel) Init() tea.Cmd {
 	return nil
 }
 
+// navigateToView handles navigation to a specific view from home
+func (m AppModel) navigateToView(view ViewType) (AppModel, tea.Cmd) {
+	if m.currentView != ViewHome {
+		return m, nil
+	}
+
+	m.currentView = view
+	sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
+
+	var cmd tea.Cmd
+	switch view {
+	case ViewLibrary:
+		m.libraryModel, cmd = m.libraryModel.Update(sizeMsg)
+	case ViewHistory:
+		m.historyModel, cmd = m.historyModel.Update(sizeMsg)
+	case ViewDownloads:
+		m.downloadsModel, cmd = m.downloadsModel.Update(sizeMsg)
+	case ViewExtensions:
+		m.extensionsModel, cmd = m.extensionsModel.Update(sizeMsg)
+	case ViewSettings:
+		m.settingsModel, cmd = m.settingsModel.Update(sizeMsg)
+	case ViewCategories:
+		m.categoriesModel, cmd = m.categoriesModel.Update(sizeMsg)
+	}
+
+	return m, cmd
+}
+
 // Update handles all messages and routes them appropriately
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case OpenReaderMsg:
+		// Launch reader with manga and chapter
+		readerModel := reader.NewModel(msg.Manga, msg.Chapter, m.sourceManager, m.storage)
+		m.readerModel = &readerModel
+		m.currentView = ViewReader
+		return m, m.readerModel.Init()
+
+	case history.OpenChapterMsg:
+		// Launch reader from history by loading manga and chapter from source
+		// For now, create a minimal manga/chapter to launch reader
+		// TODO: Fetch full manga/chapter details from source
+		manga := &source.Manga{
+			ID:         msg.MangaID,
+			SourceType: source.SourceTypeSuwayomi, // TODO: Get from history entry
+		}
+		chapter := &source.Chapter{
+			ID:      msg.ChapterID,
+			MangaID: msg.MangaID,
+		}
+		readerModel := reader.NewModel(manga, chapter, m.sourceManager, m.storage)
+		m.readerModel = &readerModel
+		m.currentView = ViewReader
+		return m, m.readerModel.Init()
+
 	case tea.KeyMsg:
 		// Handle global shortcuts
 		if m.currentView != ViewHome {
 			switch msg.String() {
 			case "esc":
+				// Save reader session before closing
+				if m.currentView == ViewReader && m.readerModel != nil {
+					m.readerModel.SaveSession()
+				}
 				m.currentView = ViewHome
+				m.readerModel = nil
 				return m, nil
 			}
 		}
 
 		switch msg.String() {
 		case "ctrl+c":
+			// Save reader session before quitting
+			if m.currentView == ViewReader && m.readerModel != nil {
+				m.readerModel.SaveSession()
+			}
 			return m, tea.Quit
 
 		case "q":
 			if m.currentView == ViewHome {
 				return m, tea.Quit
 			}
+			// Save reader session before going home
+			if m.currentView == ViewReader && m.readerModel != nil {
+				m.readerModel.SaveSession()
+			}
 			m.currentView = ViewHome
+			m.readerModel = nil
 			return m, nil
 
 		// View navigation shortcuts (only from home)
 		case "1":
-			if m.currentView == ViewHome {
-				m.currentView = ViewHome
-			}
+			return m.navigateToView(ViewHome)
 		case "2":
-			if m.currentView == ViewHome {
-				m.currentView = ViewLibrary
-				m.libraryModel, cmd = m.libraryModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-				return m, cmd
-			}
+			return m.navigateToView(ViewLibrary)
 		case "3":
-			if m.currentView == ViewHome {
-				m.currentView = ViewHistory
-			}
+			return m.navigateToView(ViewHistory)
 		case "4":
-			if m.currentView == ViewHome {
-				m.currentView = ViewBrowse
-			}
+			return m.navigateToView(ViewBrowse)
 		case "5":
-			if m.currentView == ViewHome {
-				m.currentView = ViewDownloads
-			}
+			return m.navigateToView(ViewDownloads)
 		case "6":
-			if m.currentView == ViewHome {
-				m.currentView = ViewExtensions
-			}
+			return m.navigateToView(ViewExtensions)
 		case "7":
-			if m.currentView == ViewHome {
-				m.currentView = ViewSettings
-			}
+			return m.navigateToView(ViewSettings)
+		case "8":
+			return m.navigateToView(ViewCategories)
 		}
 
 	case tea.WindowSizeMsg:
@@ -147,6 +272,33 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ViewLibrary:
 		m.libraryModel, cmd = m.libraryModel.Update(msg)
 		return m, cmd
+
+	case ViewHistory:
+		m.historyModel, cmd = m.historyModel.Update(msg)
+		return m, cmd
+
+	case ViewDownloads:
+		m.downloadsModel, cmd = m.downloadsModel.Update(msg)
+		return m, cmd
+
+	case ViewExtensions:
+		m.extensionsModel, cmd = m.extensionsModel.Update(msg)
+		return m, cmd
+
+	case ViewSettings:
+		m.settingsModel, cmd = m.settingsModel.Update(msg)
+		return m, cmd
+
+	case ViewCategories:
+		m.categoriesModel, cmd = m.categoriesModel.Update(msg)
+		return m, cmd
+
+	case ViewReader:
+		if m.readerModel != nil {
+			updated, cmd := m.readerModel.Update(msg)
+			m.readerModel = &updated
+			return m, cmd
+		}
 	}
 
 	return m, nil
@@ -166,16 +318,24 @@ func (m AppModel) View() string {
 		content = m.renderHomeView()
 	case ViewLibrary:
 		content = m.libraryModel.View()
+	case ViewReader:
+		if m.readerModel != nil {
+			content = m.readerModel.View()
+		} else {
+			content = m.renderPlaceholderView("Reader", "No manga loaded")
+		}
 	case ViewHistory:
-		content = m.renderPlaceholderView("Reading History", "📖 Your reading history will appear here")
+		content = m.historyModel.View()
 	case ViewBrowse:
 		content = m.renderPlaceholderView("Browse", "🔍 Browse manga sources here")
 	case ViewDownloads:
-		content = m.renderPlaceholderView("Downloads", "📥 Download queue will appear here")
+		content = m.downloadsModel.View()
 	case ViewExtensions:
-		content = m.renderPlaceholderView("Extensions", "🧩 Manage extensions here")
+		content = m.extensionsModel.View()
 	case ViewSettings:
-		content = m.renderPlaceholderView("Settings", "⚙️  Application settings")
+		content = m.settingsModel.View()
+	case ViewCategories:
+		content = m.categoriesModel.View()
 	default:
 		content = m.renderHomeView()
 	}
@@ -209,6 +369,7 @@ Navigation:
   5 - Downloads
   6 - Extensions
   7 - Settings
+  8 - Categories
 
   q - Quit
 `)
@@ -267,7 +428,28 @@ func (m AppModel) renderPlaceholderView(title, description string) string {
 func (m AppModel) renderStatusBar() string {
 	viewName := fmt.Sprintf("View: %s", m.currentView)
 	dimensions := fmt.Sprintf("%dx%d", m.width, m.height)
+
+	// Server status
+	serverStatus := "Server: "
+	if m.suwayomiClient != nil && m.suwayomiClient.Ping() {
+		serverStatus += lipgloss.NewStyle().
+			Foreground(ColorSuccess).
+			Render("✓ Connected")
+	} else {
+		serverStatus += lipgloss.NewStyle().
+			Foreground(ColorMuted).
+			Render("○ Not Connected")
+	}
+
 	help := "Press ? for help"
 
-	return GetStatusBarText(viewName, dimensions, help)
+	return GetStatusBarText(viewName, serverStatus, dimensions, help)
+}
+
+// Messages
+
+// OpenReaderMsg is sent when we want to open the reader
+type OpenReaderMsg struct {
+	Manga   *source.Manga
+	Chapter *source.Chapter
 }

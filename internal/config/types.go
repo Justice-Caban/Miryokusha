@@ -2,9 +2,11 @@ package config
 
 // Config represents the application configuration
 type Config struct {
-	Servers     []ServerConfig  `mapstructure:"servers"`
-	Preferences PreferencesConfig `mapstructure:"preferences"`
-	Paths       PathsConfig     `mapstructure:"paths"`
+	Servers          []ServerConfig         `mapstructure:"servers"`
+	ServerManagement ServerManagementConfig `mapstructure:"server_management"`
+	Preferences      PreferencesConfig      `mapstructure:"preferences"`
+	Paths            PathsConfig            `mapstructure:"paths"`
+	Updates          UpdateConfig           `mapstructure:"updates"`
 }
 
 // ServerConfig represents a Suwayomi server configuration
@@ -21,6 +23,15 @@ type AuthConfig struct {
 	Username string `mapstructure:"username,omitempty"`
 	Password string `mapstructure:"password,omitempty"`
 	Token    string `mapstructure:"token,omitempty"`
+}
+
+// ServerManagementConfig represents server process management configuration
+type ServerManagementConfig struct {
+	Enabled        bool     `mapstructure:"enabled"`         // Enable server management
+	ExecutablePath string   `mapstructure:"executable_path"` // Path to Suwayomi JAR/binary
+	Args           []string `mapstructure:"args"`            // Additional arguments
+	WorkDir        string   `mapstructure:"work_dir"`        // Working directory
+	AutoStart      bool     `mapstructure:"auto_start"`      // Start server on app launch
 }
 
 // PreferencesConfig represents user preferences
@@ -41,10 +52,29 @@ type PathsConfig struct {
 	Downloads string `mapstructure:"downloads"`
 }
 
+// UpdateConfig represents library update configuration
+type UpdateConfig struct {
+	SmartUpdate            bool    `mapstructure:"smart_update"`             // Use smart update algorithm (Mihon-style)
+	MinIntervalHours       int     `mapstructure:"min_interval_hours"`       // Minimum hours between checks (default: 12)
+	UpdateOnlyOngoing      bool    `mapstructure:"update_only_ongoing"`      // Only update ongoing series
+	UpdateOnlyStarted      bool    `mapstructure:"update_only_started"`      // Only update series that have been read
+	MaxConsecutiveFailures int     `mapstructure:"max_consecutive_failures"` // Skip after this many failures
+	IntervalMultiplier     float64 `mapstructure:"interval_multiplier"`      // Multiply expected interval by this
+	AutoUpdateEnabled      bool    `mapstructure:"auto_update_enabled"`      // Enable automatic updates
+	AutoUpdateIntervalHrs  int     `mapstructure:"auto_update_interval_hrs"` // Hours between automatic updates
+}
+
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
 	return &Config{
 		Servers: []ServerConfig{},
+		ServerManagement: ServerManagementConfig{
+			Enabled:        false,
+			ExecutablePath: "",
+			Args:           []string{},
+			WorkDir:        "",
+			AutoStart:      false,
+		},
 		Preferences: PreferencesConfig{
 			Theme:          "dark",
 			DefaultServer:  0,
@@ -58,6 +88,16 @@ func DefaultConfig() *Config {
 			Database:  "", // Will be set to default location
 			Cache:     "", // Will be set to default location
 			Downloads: "", // Will be set to default location
+		},
+		Updates: UpdateConfig{
+			SmartUpdate:            true,  // Enable smart updates by default
+			MinIntervalHours:       12,    // Check at most every 12 hours
+			UpdateOnlyOngoing:      true,  // Skip completed series
+			UpdateOnlyStarted:      false, // Update all, not just started
+			MaxConsecutiveFailures: 10,    // Skip after 10 consecutive failures
+			IntervalMultiplier:     1.5,   // 1.5x safety margin on expected interval
+			AutoUpdateEnabled:      false, // Disable auto-updates by default
+			AutoUpdateIntervalHrs:  24,    // Auto-update once per day if enabled
 		},
 	}
 }
