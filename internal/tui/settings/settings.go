@@ -200,6 +200,10 @@ func (m Model) View() string {
 		b.WriteString(m.renderServerHealth())
 		b.WriteString("\n")
 
+		// Smart Updates Section
+		b.WriteString(m.renderSmartUpdates())
+		b.WriteString("\n")
+
 		// Application Info Section
 		b.WriteString(m.renderAppInfo())
 	}
@@ -289,6 +293,59 @@ func (m Model) renderServerHealth() string {
 		b.WriteString("\n")
 		b.WriteString(mutedStyle.Render(fmt.Sprintf("Last checked: %s", m.formatRelativeTime(m.lastHealthCheck))))
 	}
+
+	return b.String()
+}
+
+// renderSmartUpdates renders the smart updates configuration section
+func (m Model) renderSmartUpdates() string {
+	var b strings.Builder
+
+	b.WriteString(sectionStyle.Render("Smart Updates (Mihon-style)"))
+	b.WriteString("\n")
+
+	if m.config == nil {
+		b.WriteString(mutedStyle.Render("No configuration loaded"))
+		return b.String()
+	}
+
+	// Smart update enabled
+	enabledValue := "Disabled"
+	if m.config.Updates.SmartUpdate {
+		enabledValue = successStyle.Render("Enabled ✓")
+	}
+	b.WriteString(m.renderConfigLine("Smart Updates", enabledValue))
+
+	// Only show details if smart updates are enabled
+	if m.config.Updates.SmartUpdate {
+		b.WriteString(m.renderConfigLine("Min Interval", fmt.Sprintf("%d hours", m.config.Updates.MinIntervalHours)))
+
+		onlyOngoingValue := "No"
+		if m.config.Updates.UpdateOnlyOngoing {
+			onlyOngoingValue = "Yes"
+		}
+		b.WriteString(m.renderConfigLine("Only Ongoing", onlyOngoingValue))
+
+		onlyStartedValue := "No"
+		if m.config.Updates.UpdateOnlyStarted {
+			onlyStartedValue = "Yes"
+		}
+		b.WriteString(m.renderConfigLine("Only Started", onlyStartedValue))
+
+		b.WriteString(m.renderConfigLine("Max Failures", fmt.Sprintf("%d", m.config.Updates.MaxConsecutiveFailures)))
+		b.WriteString(m.renderConfigLine("Interval Multiplier", fmt.Sprintf("%.1fx", m.config.Updates.IntervalMultiplier)))
+	}
+
+	// Auto-update status
+	b.WriteString("\n")
+	autoUpdateValue := "Disabled"
+	if m.config.Updates.AutoUpdateEnabled {
+		autoUpdateValue = successStyle.Render(fmt.Sprintf("Enabled (every %dh)", m.config.Updates.AutoUpdateIntervalHrs))
+	}
+	b.WriteString(m.renderConfigLine("Auto-Update", autoUpdateValue))
+
+	b.WriteString("\n")
+	b.WriteString(mutedStyle.Render("Note: Edit config.yaml to change these settings"))
 
 	return b.String()
 }

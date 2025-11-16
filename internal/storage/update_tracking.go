@@ -192,6 +192,17 @@ func (utm *UpdateTrackingManager) GetMangaForSmartUpdate(config *SmartUpdateConf
 	var smartUpdateIDs []string
 
 	for _, mangaID := range allMangaIDs {
+		// Check if manga has been started (if configured to only update started manga)
+		if config.UpdateOnlyStarted {
+			hasHistory, err := utm.hasMangaBeenRead(mangaID)
+			if err != nil {
+				return nil, err
+			}
+			if !hasHistory {
+				continue // Skip manga that hasn't been read yet
+			}
+		}
+
 		tracking, err := utm.GetTracking(mangaID)
 		if err != nil {
 			return nil, err
@@ -240,6 +251,18 @@ func (utm *UpdateTrackingManager) GetMangaForSmartUpdate(config *SmartUpdateConf
 	}
 
 	return smartUpdateIDs, nil
+}
+
+// hasMangaBeenRead checks if a manga has any reading history
+func (utm *UpdateTrackingManager) hasMangaBeenRead(mangaID string) (bool, error) {
+	var count int
+	err := utm.db.conn.QueryRow(`
+		SELECT COUNT(*) FROM reading_history WHERE manga_id = ? LIMIT 1
+	`, mangaID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // GetUpdateStats returns statistics about update tracking
