@@ -637,6 +637,7 @@ func (m Model) saveProgress() tea.Msg {
 
 	err := m.storage.Progress.UpdateProgress(
 		m.manga.ID,
+		m.manga.Title,
 		m.chapter.ID,
 		m.currentPage,
 		len(m.pages),

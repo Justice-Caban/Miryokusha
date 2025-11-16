@@ -392,8 +392,14 @@ func (m Model) renderContinueReading() string {
 		// Time since last read
 		timeSince := formatTimeSince(entry.LastReadAt)
 
+		// Use manga title if available, otherwise fall back to ID
+		displayName := entry.MangaTitle
+		if displayName == "" {
+			displayName = entry.MangaID
+		}
+
 		line := fmt.Sprintf("  %s - Page %d/%d %s  %s",
-			entry.MangaID, // TODO: Get manga title from cache/source
+			displayName,
 			entry.CurrentPage+1,
 			entry.TotalPages,
 			progressBar,

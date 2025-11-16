@@ -97,7 +97,7 @@ func (db *DB) initSchema() error {
 	}
 
 	// If schema is already at latest version, skip
-	const latestVersion = 2
+	const latestVersion = 3
 	if currentVersion >= latestVersion {
 		return nil
 	}
@@ -122,6 +122,18 @@ func (db *DB) initSchema() error {
 
 		// Record schema version
 		_, err = db.conn.Exec("INSERT INTO schema_version (version) VALUES (?)", 2)
+		if err != nil {
+			return fmt.Errorf("failed to record schema version: %w", err)
+		}
+	}
+
+	if currentVersion < 3 {
+		if err := db.applySchemaV3(); err != nil {
+			return fmt.Errorf("failed to apply schema v3: %w", err)
+		}
+
+		// Record schema version
+		_, err = db.conn.Exec("INSERT INTO schema_version (version) VALUES (?)", 3)
 		if err != nil {
 			return fmt.Errorf("failed to record schema version: %w", err)
 		}
@@ -254,6 +266,17 @@ func (db *DB) applySchemaV2() error {
 	CREATE INDEX IF NOT EXISTS idx_update_tracking_last_check ON manga_update_tracking(last_check);
 	CREATE INDEX IF NOT EXISTS idx_update_tracking_completed ON manga_update_tracking(is_completed);
 	CREATE INDEX IF NOT EXISTS idx_update_tracking_ongoing ON manga_update_tracking(is_ongoing);
+	`
+
+	_, err := db.conn.Exec(schema)
+	return err
+}
+
+// applySchemaV3 adds manga_title to reading_progress (version 3)
+func (db *DB) applySchemaV3() error {
+	schema := `
+	-- Add manga_title column to reading_progress for better UX
+	ALTER TABLE reading_progress ADD COLUMN manga_title TEXT DEFAULT '';
 	`
 
 	_, err := db.conn.Exec(schema)
