@@ -296,9 +296,11 @@ func (u *Updater) updateSingleManga(manga *source.Manga) (*UpdateTask, error) {
 	}
 
 	// Get current chapter count from storage (if available)
-	if u.storage != nil {
-		// TODO: Get stored chapter count
-		task.OldChapterCount = 0
+	if u.storage != nil && u.storage.UpdateTracking != nil {
+		tracking, err := u.storage.UpdateTracking.GetTracking(manga.ID)
+		if err == nil && tracking != nil {
+			task.OldChapterCount = tracking.ChapterCount
+		}
 	}
 
 	// Fetch latest chapters from source

@@ -414,7 +414,35 @@ func (m *Manager) handleError(item *DownloadItem, err error) {
 		m.onError(item, err)
 	}
 
-	// TODO: Implement retry logic
+	// Implement retry logic
+	if item.RetryCount < m.config.RetryAttempts {
+		// Increment retry count
+		item.RetryCount++
+
+		// Reset status to queued for retry
+		item.Status = StatusQueued
+		item.Error = nil
+
+		// Add back to queue with lower priority (higher number)
+		// This ensures newer downloads are processed first
+		item.Priority += 100
+
+		// Wait before retrying (exponential backoff)
+		retryDelay := m.config.RetryDelay * time.Duration(item.RetryCount)
+		time.AfterFunc(retryDelay, func() {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+
+			// Check if item is still in queue and queued status
+			for _, qItem := range m.queue {
+				if qItem.ID == item.ID && qItem.Status == StatusQueued {
+					// Item is ready to retry
+					m.processQueue()
+					break
+				}
+			}
+		})
+	}
 }
 
 // sortQueue sorts the queue by priority (lower number = higher priority)

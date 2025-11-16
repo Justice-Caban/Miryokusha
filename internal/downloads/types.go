@@ -39,6 +39,9 @@ type DownloadItem struct {
 	BytesDownloaded int64
 	TotalBytes      int64
 
+	// Retry tracking
+	RetryCount int // Current number of retry attempts
+
 	// Cancel function
 	Cancel func()
 }
