@@ -102,6 +102,14 @@ func NewAppModel() AppModel {
 	var suwayomiClient *suwayomi.Client
 	if defaultServer := cfg.GetDefaultServer(); defaultServer != nil {
 		suwayomiClient = suwayomi.NewClient(defaultServer.URL)
+
+		// Create Suwayomi source and add to manager
+		suwayomiSource := source.NewSuwayomiSource(
+			"suwayomi-default",
+			defaultServer.Name,
+			defaultServer.URL,
+		)
+		sm.AddSource(suwayomiSource)
 	} else {
 		errors.AddError(
 			"No Server Configured",
@@ -191,14 +199,18 @@ func (m AppModel) navigateToView(view ViewType) (AppModel, tea.Cmd) {
 	sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
 
 	var cmd tea.Cmd
+	var initCmd tea.Cmd
 	switch view {
 	case ViewLibrary:
+		initCmd = m.libraryModel.Init()
 		m.libraryModel, cmd = m.libraryModel.Update(sizeMsg)
 	case ViewHistory:
+		initCmd = m.historyModel.Init()
 		m.historyModel, cmd = m.historyModel.Update(sizeMsg)
 	case ViewDownloads:
 		m.downloadsModel, cmd = m.downloadsModel.Update(sizeMsg)
 	case ViewExtensions:
+		initCmd = m.extensionsModel.Init()
 		m.extensionsModel, cmd = m.extensionsModel.Update(sizeMsg)
 	case ViewSettings:
 		m.settingsModel, cmd = m.settingsModel.Update(sizeMsg)
@@ -206,7 +218,8 @@ func (m AppModel) navigateToView(view ViewType) (AppModel, tea.Cmd) {
 		m.categoriesModel, cmd = m.categoriesModel.Update(sizeMsg)
 	}
 
-	return m, cmd
+	// Batch the init command and size update command
+	return m, tea.Batch(initCmd, cmd)
 }
 
 // Update handles all messages and routes them appropriately
