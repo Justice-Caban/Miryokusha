@@ -82,13 +82,13 @@ func NewAppModel() AppModel {
 		cfg = config.DefaultConfig()
 	}
 
-	// Initialize storage
-	st, err := storage.NewStorage()
+	// Initialize storage with database path from config
+	st, err := storage.NewStorage(cfg.Paths.Database)
 	if err != nil {
 		// Storage is critical - notify user
 		errors.AddError(
 			"Storage Initialization Failed",
-			fmt.Sprintf("Cannot initialize local database: %v", err),
+			fmt.Sprintf("Cannot initialize local database at %s: %v", cfg.Paths.Database, err),
 			"Reading history, progress, and bookmarks will not be saved. Check disk space and permissions.",
 			SeverityError,
 		)

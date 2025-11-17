@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -88,15 +89,14 @@ func Save(config *Config) error {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
 
-	// Marshal config to Viper
-	viper.Set("servers", config.Servers)
-	viper.Set("preferences", config.Preferences)
-	viper.Set("paths", config.Paths)
-	viper.Set("updates", config.Updates)
-	viper.Set("server_management", config.ServerManagement)
+	// Marshal config to YAML with proper struct tags
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
 
 	// Write config file
-	if err := viper.WriteConfigAs(configPath); err != nil {
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

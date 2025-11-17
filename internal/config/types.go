@@ -2,67 +2,67 @@ package config
 
 // Config represents the application configuration
 type Config struct {
-	Servers          []ServerConfig         `mapstructure:"servers"`
-	ServerManagement ServerManagementConfig `mapstructure:"server_management"`
-	Preferences      PreferencesConfig      `mapstructure:"preferences"`
-	Paths            PathsConfig            `mapstructure:"paths"`
-	Updates          UpdateConfig           `mapstructure:"updates"`
+	Servers          []ServerConfig         `mapstructure:"servers" yaml:"servers"`
+	ServerManagement ServerManagementConfig `mapstructure:"server_management" yaml:"server_management"`
+	Preferences      PreferencesConfig      `mapstructure:"preferences" yaml:"preferences"`
+	Paths            PathsConfig            `mapstructure:"paths" yaml:"paths"`
+	Updates          UpdateConfig           `mapstructure:"updates" yaml:"updates"`
 }
 
 // ServerConfig represents a Suwayomi server configuration
 type ServerConfig struct {
-	Name    string     `mapstructure:"name"`
-	URL     string     `mapstructure:"url"`
-	Default bool       `mapstructure:"default"`
-	Auth    *AuthConfig `mapstructure:"auth,omitempty"`
+	Name    string      `mapstructure:"name" yaml:"name"`
+	URL     string      `mapstructure:"url" yaml:"url"`
+	Default bool        `mapstructure:"default" yaml:"default"`
+	Auth    *AuthConfig `mapstructure:"auth,omitempty" yaml:"auth,omitempty"`
 }
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	Type     string `mapstructure:"type"` // "basic", "token", "none"
-	Username string `mapstructure:"username,omitempty"`
-	Password string `mapstructure:"password,omitempty"`
-	Token    string `mapstructure:"token,omitempty"`
+	Type     string `mapstructure:"type" yaml:"type"`                         // "basic", "token", "none"
+	Username string `mapstructure:"username,omitempty" yaml:"username,omitempty"`
+	Password string `mapstructure:"password,omitempty" yaml:"password,omitempty"`
+	Token    string `mapstructure:"token,omitempty" yaml:"token,omitempty"`
 }
 
 // ServerManagementConfig represents server process management configuration
 type ServerManagementConfig struct {
-	Enabled        bool     `mapstructure:"enabled"`         // Enable server management
-	ExecutablePath string   `mapstructure:"executable_path"` // Path to Suwayomi JAR/binary
-	Args           []string `mapstructure:"args"`            // Additional arguments
-	WorkDir        string   `mapstructure:"work_dir"`        // Working directory
-	AutoStart      bool     `mapstructure:"auto_start"`      // Start server on app launch
+	Enabled        bool     `mapstructure:"enabled" yaml:"enabled"`                  // Enable server management
+	ExecutablePath string   `mapstructure:"executable_path" yaml:"executable_path"`  // Path to Suwayomi JAR/binary
+	Args           []string `mapstructure:"args" yaml:"args"`                        // Additional arguments
+	WorkDir        string   `mapstructure:"work_dir" yaml:"work_dir"`                // Working directory
+	AutoStart      bool     `mapstructure:"auto_start" yaml:"auto_start"`            // Start server on app launch
 }
 
 // PreferencesConfig represents user preferences
 type PreferencesConfig struct {
-	Theme          string   `mapstructure:"theme"`           // "dark", "light"
-	DefaultServer  int      `mapstructure:"default_server"`  // Index of default server
-	CacheSizeMB    int      `mapstructure:"cache_size_mb"`
-	AutoMarkRead   bool     `mapstructure:"auto_mark_read"`
-	ReadingMode    string   `mapstructure:"reading_mode"`    // "single", "double", "webtoon"
-	LocalScanDirs  []string `mapstructure:"local_scan_dirs"`
-	ShowThumbnails bool     `mapstructure:"show_thumbnails"`
+	Theme          string   `mapstructure:"theme" yaml:"theme"`                      // "dark", "light"
+	DefaultServer  int      `mapstructure:"default_server" yaml:"default_server"`    // Index of default server
+	CacheSizeMB    int      `mapstructure:"cache_size_mb" yaml:"cache_size_mb"`
+	AutoMarkRead   bool     `mapstructure:"auto_mark_read" yaml:"auto_mark_read"`
+	ReadingMode    string   `mapstructure:"reading_mode" yaml:"reading_mode"`        // "single", "double", "webtoon"
+	LocalScanDirs  []string `mapstructure:"local_scan_dirs" yaml:"local_scan_dirs"`
+	ShowThumbnails bool     `mapstructure:"show_thumbnails" yaml:"show_thumbnails"`
 }
 
 // PathsConfig represents path configurations
 type PathsConfig struct {
-	Database  string `mapstructure:"database"`
-	Cache     string `mapstructure:"cache"`
-	Downloads string `mapstructure:"downloads"`
+	Database  string `mapstructure:"database" yaml:"database"`
+	Cache     string `mapstructure:"cache" yaml:"cache"`
+	Downloads string `mapstructure:"downloads" yaml:"downloads"`
 }
 
 // UpdateConfig represents library update configuration
 type UpdateConfig struct {
-	SmartUpdate            bool    `mapstructure:"smart_update"`             // Use smart update algorithm (Mihon-style)
-	MinIntervalHours       int     `mapstructure:"min_interval_hours"`       // Minimum hours between checks (default: 12)
-	UpdateOnlyOngoing      bool    `mapstructure:"update_only_ongoing"`      // Only update ongoing series
-	UpdateOnlyStarted      bool    `mapstructure:"update_only_started"`      // Only update series that have been read
-	UpdateOnlyCompleted    bool    `mapstructure:"update_only_completed"`    // Only update completed series
-	MaxConsecutiveFailures int     `mapstructure:"max_consecutive_failures"` // Skip after this many failures
-	IntervalMultiplier     float64 `mapstructure:"interval_multiplier"`      // Multiply expected interval by this
-	AutoUpdateEnabled      bool    `mapstructure:"auto_update_enabled"`      // Enable automatic updates
-	AutoUpdateIntervalHrs  int     `mapstructure:"auto_update_interval_hrs"` // Hours between automatic updates
+	SmartUpdate            bool    `mapstructure:"smart_update" yaml:"smart_update"`                                  // Use smart update algorithm (Mihon-style)
+	MinIntervalHours       int     `mapstructure:"min_interval_hours" yaml:"min_interval_hours"`                      // Minimum hours between checks (default: 12)
+	UpdateOnlyOngoing      bool    `mapstructure:"update_only_ongoing" yaml:"update_only_ongoing"`                    // Only update ongoing series
+	UpdateOnlyStarted      bool    `mapstructure:"update_only_started" yaml:"update_only_started"`                    // Only update series that have been read
+	UpdateOnlyCompleted    bool    `mapstructure:"update_only_completed" yaml:"update_only_completed"`                // Only update completed series
+	MaxConsecutiveFailures int     `mapstructure:"max_consecutive_failures" yaml:"max_consecutive_failures"`          // Skip after this many failures
+	IntervalMultiplier     float64 `mapstructure:"interval_multiplier" yaml:"interval_multiplier"`                    // Multiply expected interval by this
+	AutoUpdateEnabled      bool    `mapstructure:"auto_update_enabled" yaml:"auto_update_enabled"`                    // Enable automatic updates
+	AutoUpdateIntervalHrs  int     `mapstructure:"auto_update_interval_hrs" yaml:"auto_update_interval_hrs"`          // Hours between automatic updates
 }
 
 // DefaultConfig returns a default configuration

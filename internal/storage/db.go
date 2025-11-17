@@ -18,11 +18,15 @@ type DB struct {
 	conn *sql.DB
 }
 
-// NewDB creates a new database connection
-func NewDB() (*DB, error) {
-	dbPath, err := getDBPath()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get database path: %w", err)
+// NewDB creates a new database connection using the provided database path
+func NewDB(dbPath string) (*DB, error) {
+	if dbPath == "" {
+		// Fallback to default path if not provided
+		var err error
+		dbPath, err = getDefaultDBPath()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get database path: %w", err)
+		}
 	}
 
 	// Ensure directory exists
@@ -66,14 +70,20 @@ func (db *DB) Close() error {
 	return nil
 }
 
-// getDBPath returns the path to the database file
-func getDBPath() (string, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
+// getDefaultDBPath returns the default path to the database file
+// This is only used as a fallback when no config is available
+func getDefaultDBPath() (string, error) {
+	// Use XDG_DATA_HOME or ~/.local/share as per XDG spec
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		dataHome = filepath.Join(homeDir, ".local", "share")
 	}
 
-	return filepath.Join(configDir, "miryokusha", dbFileName), nil
+	return filepath.Join(dataHome, "miryokusha", dbFileName), nil
 }
 
 // initSchema initializes the database schema
