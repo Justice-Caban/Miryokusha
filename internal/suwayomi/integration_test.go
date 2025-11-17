@@ -104,7 +104,7 @@ func TestIntegration_MangaList(t *testing.T) {
 		t.Logf("  ID: %d", manga.ID)
 		t.Logf("  Title: %s", manga.Title)
 		t.Logf("  Unread Count: %d", manga.UnreadCount)
-		t.Logf("  Chapter Count: %d", manga.ChapterCount)
+		t.Logf("  Chapter Count: %d", manga.GetChapterCount())
 
 		// Verify expected fields
 		assert.NotZero(t, manga.ID)
@@ -172,7 +172,7 @@ func TestIntegration_MangaDetails(t *testing.T) {
 	t.Logf("  Title: %s", manga.Title)
 	t.Logf("  In Library: %t", manga.InLibrary)
 	t.Logf("  Unread Count: %d", manga.UnreadCount)
-	t.Logf("  Chapter Count: %d", manga.ChapterCount)
+	t.Logf("  Chapter Count: %d", manga.GetChapterCount())
 
 	if manga.Source != nil {
 		t.Logf("  Source: %s (%s)", manga.Source.Name, manga.Source.Lang)

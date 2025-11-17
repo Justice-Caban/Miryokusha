@@ -169,7 +169,9 @@ func TestGraphQLClient_GetMangaList(t *testing.T) {
 							"inLibrary": true,
 							"unreadCount": 5,
 							"downloadCount": 10,
-							"chapterCount": 15,
+							"chapters": {
+								"totalCount": 15
+							},
 							"source": {
 								"id": "source1",
 								"name": "Test Source",
@@ -185,7 +187,9 @@ func TestGraphQLClient_GetMangaList(t *testing.T) {
 							"inLibrary": true,
 							"unreadCount": 3,
 							"downloadCount": 8,
-							"chapterCount": 12
+							"chapters": {
+								"totalCount": 12
+							}
 						}
 					]
 				}
@@ -215,7 +219,7 @@ func TestGraphQLClient_GetMangaList(t *testing.T) {
 	assert.True(t, manga1.InLibrary)
 	assert.Equal(t, 5, manga1.UnreadCount)
 	assert.Equal(t, 10, manga1.DownloadCount)
-	assert.Equal(t, 15, manga1.ChapterCount)
+	assert.Equal(t, 15, manga1.GetChapterCount())
 	require.NotNil(t, manga1.Source)
 	assert.Equal(t, "source1", manga1.Source.ID)
 	assert.Equal(t, "Test Source", manga1.Source.Name)
@@ -244,7 +248,9 @@ func TestGraphQLClient_GetMangaDetails(t *testing.T) {
 					"inLibrary": true,
 					"unreadCount": 7,
 					"downloadCount": 12,
-					"chapterCount": 20,
+					"chapters": {
+						"totalCount": 20
+					},
 					"lastReadAt": 1700000000000,
 					"source": {
 						"id": "detailed-source",
@@ -275,7 +281,7 @@ func TestGraphQLClient_GetMangaDetails(t *testing.T) {
 	assert.True(t, manga.InLibrary)
 	assert.Equal(t, 7, manga.UnreadCount)
 	assert.Equal(t, 12, manga.DownloadCount)
-	assert.Equal(t, 20, manga.ChapterCount)
+	assert.Equal(t, 20, manga.GetChapterCount())
 	require.NotNil(t, manga.Source)
 	assert.Equal(t, "detailed-source", manga.Source.ID)
 	assert.Equal(t, "ja", manga.Source.Lang)

@@ -225,7 +225,7 @@ func (s *SuwayomiSource) convertMangaNode(node *suwayomi.MangaNode) *Manga {
 		InLibrary:     node.InLibrary,
 		UnreadCount:   node.UnreadCount,
 		DownloadCount: node.DownloadCount,
-		ChapterCount:  node.ChapterCount,
+		ChapterCount:  node.GetChapterCount(),
 	}
 
 	// Set last read time if available
