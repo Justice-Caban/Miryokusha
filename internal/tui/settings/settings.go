@@ -397,8 +397,10 @@ func (m Model) renderAppInfo() string {
 	b.WriteString(m.renderConfigLine("Name", "Miryokusha"))
 	b.WriteString(m.renderConfigLine("Version", "0.1.0-dev"))
 	b.WriteString(m.renderConfigLine("License", "GPLv3"))
-	b.WriteString(m.renderConfigLine("Config Path", "~/.config/miryokusha/config.yaml"))
-	b.WriteString(m.renderConfigLine("Data Path", "~/.local/share/miryokusha/"))
+	b.WriteString(m.renderConfigLine("Config Path", config.GetConfigPath()))
+	b.WriteString(m.renderConfigLine("Database Path", m.config.Paths.Database))
+	b.WriteString(m.renderConfigLine("Cache Path", m.config.Paths.Cache))
+	b.WriteString(m.renderConfigLine("Downloads Path", m.config.Paths.Downloads))
 
 	return b.String()
 }

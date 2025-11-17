@@ -16,8 +16,9 @@ type Storage struct {
 }
 
 // NewStorage creates a new storage instance with all managers
-func NewStorage() (*Storage, error) {
-	db, err := NewDB()
+// If dbPath is empty, the default path will be used
+func NewStorage(dbPath string) (*Storage, error) {
+	db, err := NewDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database: %w", err)
 	}
