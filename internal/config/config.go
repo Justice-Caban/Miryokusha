@@ -100,6 +100,11 @@ func Save(config *Config) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
+	// Set restrictive permissions (0600) since config contains sensitive data (passwords, tokens)
+	if err := os.Chmod(configPath, 0600); err != nil {
+		return fmt.Errorf("failed to set config file permissions: %w", err)
+	}
+
 	return nil
 }
 
