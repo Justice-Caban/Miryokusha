@@ -67,8 +67,10 @@ type AppModel struct {
 func NewAppModel() AppModel {
 	// Load configuration
 	cfg, err := config.Load()
+	var configErr error
 	if err != nil {
-		// Use default config if loading fails
+		// Store error to display to user, but use default config to continue
+		configErr = fmt.Errorf("failed to load config: %w\n\nUsing default configuration. Config file expected at: %s", err, config.GetConfigPath())
 		cfg = config.DefaultConfig()
 	}
 
@@ -142,6 +144,7 @@ func NewAppModel() AppModel {
 		downloadsModel:   dlModel,
 		settingsModel:    settingsModel,
 		categoriesModel:  categoriesModel,
+		err:              configErr, // Show config error on home screen if present
 	}
 }
 
