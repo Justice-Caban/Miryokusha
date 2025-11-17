@@ -50,6 +50,7 @@ type Model struct {
 	// Loading state
 	loading bool
 	err     error
+	warning string // Non-critical warnings (e.g., progress tracking disabled)
 }
 
 // NewModel creates a new reader model
@@ -95,7 +96,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 
 	case progressLoadedMsg:
-		if msg.progress != nil && !msg.progress.IsCompleted {
+		if msg.err != nil {
+			m.warning = fmt.Sprintf("Progress tracking unavailable: %v", msg.err)
+		} else if msg.progress != nil && !msg.progress.IsCompleted {
 			m.currentPage = msg.progress.CurrentPage
 		}
 		return m, nil
@@ -294,6 +297,16 @@ func (m Model) View() string {
 	// Header with chapter info
 	if m.showControls {
 		b.WriteString(m.renderHeader())
+		b.WriteString("\n\n")
+	}
+
+	// Warning banner (if any)
+	if m.warning != "" {
+		warningBanner := lipgloss.NewStyle().
+			Foreground(theme.ColorWarning).
+			Bold(true).
+			Render("⚠ " + m.warning)
+		b.WriteString(warningBanner)
 		b.WriteString("\n\n")
 	}
 
@@ -536,6 +549,7 @@ type chapterLoadedMsg struct {
 
 type progressLoadedMsg struct {
 	progress *storage.ProgressEntry
+	err      error
 }
 
 type chapterErrorMsg struct {
@@ -591,15 +605,24 @@ func (m Model) loadChapter() tea.Msg {
 
 func (m Model) loadProgress() tea.Msg {
 	if m.storage == nil || m.manga == nil || m.chapter == nil {
-		return progressLoadedMsg{progress: nil}
+		return progressLoadedMsg{
+			progress: nil,
+			err:      nil,
+		}
 	}
 
 	progress, err := m.storage.Progress.GetProgress(m.manga.ID, m.chapter.ID)
 	if err != nil {
-		return progressLoadedMsg{progress: nil}
+		return progressLoadedMsg{
+			progress: nil,
+			err:      err,
+		}
 	}
 
-	return progressLoadedMsg{progress: progress}
+	return progressLoadedMsg{
+		progress: progress,
+		err:      nil,
+	}
 }
 
 func (m Model) saveProgress() tea.Msg {

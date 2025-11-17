@@ -66,7 +66,18 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 
 	case categoriesLoadedMsg:
-		m.categories = msg.categories
+		if msg.err != nil {
+			m.message = fmt.Sprintf("Failed to load categories: %v", msg.err)
+			m.messageType = "error"
+			m.categories = []*storage.Category{}
+		} else {
+			m.categories = msg.categories
+			// Clear any previous error messages on successful load
+			if m.messageType == "error" {
+				m.message = ""
+				m.messageType = ""
+			}
+		}
 		return m, nil
 
 	case categoryOperationMsg:
@@ -333,6 +344,7 @@ func (m Model) renderFooter() string {
 
 type categoriesLoadedMsg struct {
 	categories []*storage.Category
+	err        error
 }
 
 type categoryOperationMsg struct {
@@ -344,15 +356,24 @@ type categoryOperationMsg struct {
 
 func (m Model) loadCategories() tea.Msg {
 	if m.storage == nil {
-		return categoriesLoadedMsg{categories: []*storage.Category{}}
+		return categoriesLoadedMsg{
+			categories: []*storage.Category{},
+			err:        fmt.Errorf("storage not initialized"),
+		}
 	}
 
 	categories, err := m.storage.Categories.GetAll()
 	if err != nil {
-		return categoriesLoadedMsg{categories: []*storage.Category{}}
+		return categoriesLoadedMsg{
+			categories: []*storage.Category{},
+			err:        err,
+		}
 	}
 
-	return categoriesLoadedMsg{categories: categories}
+	return categoriesLoadedMsg{
+		categories: categories,
+		err:        nil,
+	}
 }
 
 func (m Model) createCategory(name string, isDefault bool) tea.Cmd {
