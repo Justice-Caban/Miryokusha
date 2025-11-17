@@ -1,0 +1,57 @@
+# Miryokusha Configuration File
+# Copy this to ~/.config/miryokusha/config.yaml and edit as needed
+
+# Suwayomi Server Configuration
+servers:
+  - name: "Local Server"
+    url: "http://127.0.0.1:4567"
+    default: true
+    # Optional authentication
+    # auth:
+    #   type: "basic"  # "basic", "token", or "none"
+    #   username: "admin"
+    #   password: "password"
+
+# Server Process Management
+# This allows Miryokusha to start/stop the Suwayomi server for you
+server_management:
+  enabled: false  # Set to true to enable server management
+  executable_path: ""  # Path to Suwayomi JAR file, e.g., "/path/to/Suwayomi-Server.jar"
+  args: []  # Additional arguments to pass to the server
+  work_dir: ""  # Working directory for the server (optional)
+  auto_start: false  # Automatically start server when Miryokusha launches
+
+  # Example configurations:
+  # For JAR file:
+  # executable_path: "/home/user/suwayomi/Suwayomi-Server-v1.0.0.jar"
+  # args: ["--server.port=4567"]
+  # work_dir: "/home/user/suwayomi"
+  # auto_start: true
+
+# User Preferences
+preferences:
+  theme: "dark"  # "dark" or "light"
+  default_server: 0  # Index of default server (0-based)
+  cache_size_mb: 500
+  auto_mark_read: true
+  reading_mode: "single"  # "single", "double", or "webtoon"
+  local_scan_dirs: []
+  show_thumbnails: true
+
+# Paths Configuration
+paths:
+  database: ""  # Leave empty for default: ~/.local/share/miryokusha/miryokusha.db
+  cache: ""  # Leave empty for default: ~/.cache/miryokusha
+  downloads: ""  # Leave empty for default: ~/Downloads/Miryokusha
+
+# Library Update Configuration
+updates:
+  smart_update: true  # Use smart update algorithm (Mihon-style)
+  min_interval_hours: 12  # Minimum hours between checks
+  update_only_ongoing: true  # Only update ongoing series
+  update_only_started: false  # Only update series that have been read
+  update_only_completed: false  # Only update completed series
+  max_consecutive_failures: 10  # Skip after this many failures
+  interval_multiplier: 1.5  # Multiply expected interval by this
+  auto_update_enabled: false  # Enable automatic updates
+  auto_update_interval_hrs: 24  # Hours between automatic updates
