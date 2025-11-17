@@ -1,5 +1,5 @@
-# Miryokusha Configuration Example
-# Copy this file to ~/.config/miryokusha/config.yaml and customize
+# Miryokusha Configuration File
+# Copy this to ~/.config/miryokusha/config.yaml and edit as needed
 
 # Suwayomi Server Configuration
 servers:
@@ -45,6 +45,18 @@ preferences:
 
 # Paths Configuration
 paths:
-  database: ""  # Leave empty for default: ~/.config/miryokusha/miryokusha.db
+  database: ""  # Leave empty for default: ~/.local/share/miryokusha/miryokusha.db
   cache: ""  # Leave empty for default: ~/.cache/miryokusha
-  downloads: ""  # Leave empty for default: ~/.local/share/miryokusha/downloads
+  downloads: ""  # Leave empty for default: ~/Downloads/Miryokusha
+
+# Library Update Configuration
+updates:
+  smart_update: true  # Use smart update algorithm (Mihon-style)
+  min_interval_hours: 12  # Minimum hours between checks
+  update_only_ongoing: true  # Only update ongoing series
+  update_only_started: false  # Only update series that have been read
+  update_only_completed: false  # Only update completed series
+  max_consecutive_failures: 10  # Skip after this many failures
+  interval_multiplier: 1.5  # Multiply expected interval by this
+  auto_update_enabled: false  # Enable automatic updates
+  auto_update_interval_hrs: 24  # Hours between automatic updates
