@@ -137,10 +137,17 @@ type MangaNode struct {
 	InLibrary      bool     `json:"inLibrary"`
 	UnreadCount    int      `json:"unreadCount"`
 	DownloadCount  int      `json:"downloadCount"`
-	ChapterCount   int      `json:"chapterCount"`
+	Chapters       struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"chapters"`
 	LastReadAt     *int64   `json:"lastReadAt"`
 	LatestUploadedChapter *ChapterNode `json:"latestUploadedChapter"`
 	Source         *SourceNode `json:"source"`
+}
+
+// GetChapterCount returns the total chapter count for convenience
+func (m *MangaNode) GetChapterCount() int {
+	return m.Chapters.TotalCount
 }
 
 // ChapterNode represents a chapter in the GraphQL response
@@ -190,7 +197,9 @@ func (gc *GraphQLClient) GetMangaList(inLibrary bool, limit int, offset int) (*M
 					inLibrary
 					unreadCount
 					downloadCount
-					chapterCount
+					chapters {
+						totalCount
+					}
 					lastReadAt
 					latestUploadedChapter {
 						id
@@ -235,7 +244,9 @@ func (gc *GraphQLClient) GetMangaDetails(mangaID int) (*MangaNode, error) {
 				inLibrary
 				unreadCount
 				downloadCount
-				chapterCount
+				chapters {
+					totalCount
+				}
 				lastReadAt
 				source {
 					id
