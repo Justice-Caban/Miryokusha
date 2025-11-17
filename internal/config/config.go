@@ -64,6 +64,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	// Set defaults for missing fields
+	setConfigDefaults(config)
+
 	// Set default paths if not specified
 	if err := setDefaultPaths(config); err != nil {
 		return nil, fmt.Errorf("failed to set default paths: %w", err)
@@ -100,6 +103,11 @@ func Save(config *Config) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
+	// Set restrictive permissions (0600) since config contains sensitive data (passwords, tokens)
+	if err := os.Chmod(configPath, 0600); err != nil {
+		return fmt.Errorf("failed to set config file permissions: %w", err)
+	}
+
 	return nil
 }
 
@@ -118,6 +126,27 @@ func createDefaultConfig() (*Config, error) {
 	}
 
 	return config, nil
+}
+
+// setConfigDefaults sets defaults for missing fields
+func setConfigDefaults(config *Config) {
+	defaults := DefaultConfig()
+
+	// Set preference defaults if missing
+	if config.Preferences.Theme == "" {
+		config.Preferences.Theme = defaults.Preferences.Theme
+	}
+	if config.Preferences.ReadingMode == "" {
+		config.Preferences.ReadingMode = defaults.Preferences.ReadingMode
+	}
+	if config.Preferences.CacheSizeMB == 0 {
+		config.Preferences.CacheSizeMB = defaults.Preferences.CacheSizeMB
+	}
+
+	// Set update config defaults if all fields are zero
+	if config.Updates.MinIntervalHours == 0 {
+		config.Updates = defaults.Updates
+	}
 }
 
 // setDefaultPaths sets default paths if not already set
