@@ -41,7 +41,9 @@ type AppModel struct {
 	ready       bool
 	width       int
 	height      int
-	err         error
+
+	// Error notifications
+	errors ErrorNotificationList
 
 	// Dependencies
 	config          *config.Config
@@ -65,19 +67,31 @@ type AppModel struct {
 
 // NewAppModel creates a new application model
 func NewAppModel() AppModel {
+	var errors ErrorNotificationList
+
 	// Load configuration
 	cfg, err := config.Load()
-	var configErr error
 	if err != nil {
 		// Store error to display to user, but use default config to continue
-		configErr = fmt.Errorf("failed to load config: %w\n\nUsing default configuration. Config file expected at: %s", err, config.GetConfigPath())
+		errors.AddError(
+			"Configuration Error",
+			fmt.Sprintf("Failed to load config: %v", err),
+			fmt.Sprintf("Create or fix config file at: %s\nUsing default configuration for now.", config.GetConfigPath()),
+			SeverityWarning,
+		)
 		cfg = config.DefaultConfig()
 	}
 
 	// Initialize storage
 	st, err := storage.NewStorage()
 	if err != nil {
-		// Handle error but continue (storage is optional)
+		// Storage is critical - notify user
+		errors.AddError(
+			"Storage Initialization Failed",
+			fmt.Sprintf("Cannot initialize local database: %v", err),
+			"Reading history, progress, and bookmarks will not be saved. Check disk space and permissions.",
+			SeverityError,
+		)
 		st = nil
 	}
 
@@ -88,6 +102,13 @@ func NewAppModel() AppModel {
 	var suwayomiClient *suwayomi.Client
 	if defaultServer := cfg.GetDefaultServer(); defaultServer != nil {
 		suwayomiClient = suwayomi.NewClient(defaultServer.URL)
+	} else {
+		errors.AddError(
+			"No Server Configured",
+			"No Suwayomi server is configured in config",
+			"Add a server in Settings or edit config.yaml to connect to your Suwayomi instance.",
+			SeverityWarning,
+		)
 	}
 
 	// Initialize library model
@@ -120,7 +141,14 @@ func NewAppModel() AppModel {
 
 		// Auto-start if configured
 		if cfg.ServerManagement.AutoStart {
-			_ = serverMgr.Start()
+			if err := serverMgr.Start(); err != nil {
+				errors.AddError(
+					"Server Auto-Start Failed",
+					fmt.Sprintf("Could not auto-start Suwayomi server: %v", err),
+					"Start the server manually or check server management configuration.",
+					SeverityError,
+				)
+			}
 		}
 	}
 
@@ -144,7 +172,7 @@ func NewAppModel() AppModel {
 		downloadsModel:   dlModel,
 		settingsModel:    settingsModel,
 		categoriesModel:  categoriesModel,
-		err:              configErr, // Show config error on home screen if present
+		errors:           errors, // Collect all initialization errors
 	}
 }
 
@@ -398,6 +426,18 @@ func (m AppModel) renderHomeView() string {
 	title := TitleStyle.Render("🌸 MIRYOKUSHA")
 	subtitle := SubtitleStyle.Render("Suwayomi TUI Client")
 
+	var components []string
+	components = append(components, title, subtitle)
+
+	// Show error notifications if any exist
+	if m.errors.HasErrors() {
+		errorSection := lipgloss.NewStyle().
+			MarginTop(2).
+			MarginBottom(1).
+			Render(m.errors.Render(m.width - 10))
+		components = append(components, errorSection)
+	}
+
 	menu := lipgloss.NewStyle().
 		MarginTop(2).
 		MarginBottom(2).
@@ -414,17 +454,16 @@ Navigation:
 
   q - Quit
 `)
+	components = append(components, menu)
 
 	status := lipgloss.NewStyle().
 		Foreground(ColorMuted).
 		Render("Development Status: Basic TUI Framework ✓")
+	components = append(components, status)
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		title,
-		subtitle,
-		menu,
-		status,
+		components...,
 	)
 
 	// Center the content
@@ -465,7 +504,7 @@ func (m AppModel) renderPlaceholderView(title, description string) string {
 	)
 }
 
-// renderStatusBar renders the bottom status bar
+// renderStatusBar renders the bottom status bar with error notifications
 func (m AppModel) renderStatusBar() string {
 	viewName := fmt.Sprintf("View: %s", m.currentView)
 	dimensions := fmt.Sprintf("%dx%d", m.width, m.height)
@@ -482,9 +521,23 @@ func (m AppModel) renderStatusBar() string {
 			Render("○ Not Connected")
 	}
 
+	// Error notifications indicator
+	var errorIndicator string
+	if m.errors.HasErrors() {
+		count := m.errors.Count()
+		color := ColorWarning
+		if m.errors.HasCritical() {
+			color = ColorError
+		}
+		errorIndicator = lipgloss.NewStyle().
+			Foreground(color).
+			Bold(true).
+			Render(fmt.Sprintf("  ⚠ %d Issue(s)", count))
+	}
+
 	help := "Press ? for help"
 
-	return GetStatusBarText(viewName, serverStatus, dimensions, help)
+	return GetStatusBarText(viewName, serverStatus+errorIndicator, dimensions, help)
 }
 
 // Messages
