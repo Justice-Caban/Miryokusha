@@ -11,6 +11,9 @@
 # Build output directory
 bin/
 
+# Built binary in root directory
+miryokusha
+
 # Test binary, built with `go test -c`
 *.test
 
