@@ -265,7 +265,7 @@ func (gc *GraphQLClient) GetMangaDetails(mangaID int) (*MangaNode, error) {
 func (gc *GraphQLClient) GetChapterList(mangaID int) ([]ChapterNode, error) {
 	query := `
 		query GetChapters($mangaId: Int!) {
-			chapters(condition: {mangaId: $mangaId}, orderBy: CHAPTER_NUMBER_DESC) {
+			chapters(condition: {mangaId: $mangaId}) {
 				nodes {
 					id
 					name
@@ -294,7 +294,24 @@ func (gc *GraphQLClient) GetChapterList(mangaID int) ([]ChapterNode, error) {
 		return nil, err
 	}
 
-	return result.Chapters.Nodes, nil
+	// Sort chapters by chapter number in descending order (newest first)
+	chapters := result.Chapters.Nodes
+	sortChaptersByNumberDesc(chapters)
+
+	return chapters, nil
+}
+
+// sortChaptersByNumberDesc sorts chapters by chapter number in descending order
+func sortChaptersByNumberDesc(chapters []ChapterNode) {
+	// Simple bubble sort - good enough for chapter lists
+	n := len(chapters)
+	for i := 0; i < n-1; i++ {
+		for j := 0; j < n-i-1; j++ {
+			if chapters[j].ChapterNumber < chapters[j+1].ChapterNumber {
+				chapters[j], chapters[j+1] = chapters[j+1], chapters[j]
+			}
+		}
+	}
 }
 
 // UpdateChapter updates a chapter's read/bookmark status
