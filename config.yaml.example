@@ -36,7 +36,7 @@ preferences:
   auto_mark_read: true
   reading_mode: "single"  # "single", "double", or "webtoon"
   local_scan_dirs: []
-  show_thumbnails: true
+  show_thumbnails: true  # Display manga cover images in library (requires Kitty terminal)
 
 # Paths Configuration
 paths:
