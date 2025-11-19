@@ -758,7 +758,7 @@ func (m Model) loadChapter() tea.Msg {
 	}
 
 	// Load pages for current chapter
-	pages, err := src.GetAllPages(m.chapter.ID)
+	pages, err := src.GetAllPages(m.chapter)
 	if err != nil {
 		return chapterErrorMsg{err: fmt.Errorf("failed to load pages: %w", err)}
 	}

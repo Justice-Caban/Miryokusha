@@ -304,7 +304,7 @@ func (m *Manager) downloadChapter(item *DownloadItem) {
 	item.StartedAt = time.Now()
 
 	// Get all pages for the chapter
-	pages, err := m.sourceManager.GetAllPages(item.ChapterID)
+	pages, err := m.sourceManager.GetAllPages(item.Chapter)
 	if err != nil {
 		m.handleError(item, err)
 		return
@@ -337,7 +337,7 @@ func (m *Manager) downloadChapter(item *DownloadItem) {
 
 		// Download page with timeout
 		pageCtx, pageCancel := context.WithTimeout(ctx, m.config.PageTimeout)
-		err := m.downloadPage(pageCtx, page, chapterDir, i, item.ChapterID)
+		err := m.downloadPage(pageCtx, page, chapterDir, i, item.Chapter)
 		pageCancel()
 
 		if err != nil {
@@ -371,7 +371,7 @@ func (m *Manager) downloadChapter(item *DownloadItem) {
 }
 
 // downloadPage downloads a single page
-func (m *Manager) downloadPage(ctx context.Context, page *source.Page, chapterDir string, index int, chapterID string) error {
+func (m *Manager) downloadPage(ctx context.Context, page *source.Page, chapterDir string, index int, chapter *source.Chapter) error {
 	// Get page data - try using the ImageData if it's already loaded
 	var data []byte
 	if len(page.ImageData) > 0 {
@@ -379,7 +379,7 @@ func (m *Manager) downloadPage(ctx context.Context, page *source.Page, chapterDi
 	} else {
 		// Otherwise fetch from source
 		var err error
-		data, err = m.sourceManager.GetPage(chapterID, index)
+		data, err = m.sourceManager.GetPage(chapter, index)
 		if err != nil {
 			return err
 		}

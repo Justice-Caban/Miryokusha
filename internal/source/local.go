@@ -360,10 +360,10 @@ func (ls *LocalSource) GetChapter(chapterID string) (*Chapter, error) {
 }
 
 // GetPage retrieves a specific page from a chapter
-func (ls *LocalSource) GetPage(chapterID string, pageIndex int) (*Page, error) {
+func (ls *LocalSource) GetPage(chapter *Chapter, pageIndex int) (*Page, error) {
 	// Extract page from the source file
 	// This is a simplified version - full implementation would cache pages
-	pages, err := ls.GetAllPages(chapterID)
+	pages, err := ls.GetAllPages(chapter)
 	if err != nil {
 		return nil, err
 	}
@@ -376,12 +376,7 @@ func (ls *LocalSource) GetPage(chapterID string, pageIndex int) (*Page, error) {
 }
 
 // GetAllPages retrieves all pages from a chapter
-func (ls *LocalSource) GetAllPages(chapterID string) ([]*Page, error) {
-	chapter, err := ls.GetChapter(chapterID)
-	if err != nil {
-		return nil, err
-	}
-
+func (ls *LocalSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
 	// For now, return placeholder - full implementation would extract images
 	// This would need the original file path stored in the chapter
 	pages := make([]*Page, chapter.PageCount)

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -82,10 +83,10 @@ type Source interface {
 	GetChapter(chapterID string) (*Chapter, error)
 
 	// GetPage retrieves a specific page from a chapter
-	GetPage(chapterID string, pageIndex int) (*Page, error)
+	GetPage(chapter *Chapter, pageIndex int) (*Page, error)
 
 	// GetAllPages retrieves all pages from a chapter
-	GetAllPages(chapterID string) ([]*Page, error)
+	GetAllPages(chapter *Chapter) ([]*Page, error)
 
 	// Search searches for manga by query (optional, may return nil for unsupported sources)
 	Search(query string) ([]*Manga, error)
@@ -184,28 +185,31 @@ func (sm *SourceManager) SearchAllSources(query string) ([]*Manga, error) {
 }
 
 // GetAllPages retrieves all pages for a chapter from its source
-func (sm *SourceManager) GetAllPages(chapterID string) ([]*Page, error) {
-	// Try each source until we find one that has this chapter
+func (sm *SourceManager) GetAllPages(chapter *Chapter) ([]*Page, error) {
+	// Find the source that matches this chapter's source ID
 	for _, source := range sm.sources {
+		if source.GetID() != chapter.SourceID {
+			continue
+		}
 		if !source.IsAvailable() {
 			continue
 		}
-		pages, err := source.GetAllPages(chapterID)
-		if err == nil && pages != nil {
-			return pages, nil
-		}
+		return source.GetAllPages(chapter)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("source not found for chapter %s (source ID: %s)", chapter.ID, chapter.SourceID)
 }
 
 // GetPage retrieves a specific page from a chapter
-func (sm *SourceManager) GetPage(chapterID string, pageIndex int) ([]byte, error) {
-	// Try each source until we find one that has this chapter
+func (sm *SourceManager) GetPage(chapter *Chapter, pageIndex int) ([]byte, error) {
+	// Find the source that matches this chapter's source ID
 	for _, source := range sm.sources {
+		if source.GetID() != chapter.SourceID {
+			continue
+		}
 		if !source.IsAvailable() {
 			continue
 		}
-		page, err := source.GetPage(chapterID, pageIndex)
+		page, err := source.GetPage(chapter, pageIndex)
 		if err == nil && page != nil {
 			// If ImageData is already loaded, return it
 			if len(page.ImageData) > 0 {
@@ -216,5 +220,5 @@ func (sm *SourceManager) GetPage(chapterID string, pageIndex int) ([]byte, error
 			return page.ImageData, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("source not found for chapter %s (source ID: %s)", chapter.ID, chapter.SourceID)
 }

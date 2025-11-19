@@ -26,6 +26,7 @@ type DownloadItem struct {
 	ChapterID   string
 	ChapterName string
 	SourceType  source.SourceType
+	Chapter     *source.Chapter // Full chapter object for API calls
 
 	Status       DownloadStatus
 	Priority     int // Lower number = higher priority
