@@ -144,7 +144,7 @@ type ChapterNode struct {
 	ID            int     `json:"id"`
 	Name          string  `json:"name"`
 	ChapterNumber float64 `json:"chapterNumber"`
-	UploadDate    int64   `json:"uploadDate"`
+	UploadDate    string  `json:"uploadDate"`
 	IsRead        bool    `json:"isRead"`
 	IsBookmarked  bool    `json:"isBookmarked"`
 	IsDownloaded  bool    `json:"isDownloaded"`
