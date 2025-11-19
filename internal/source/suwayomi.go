@@ -239,7 +239,12 @@ func (s *SuwayomiSource) convertMangaNode(node *suwayomi.MangaNode) *Manga {
 
 // convertChapterNode converts a GraphQL ChapterNode to source.Chapter
 func (s *SuwayomiSource) convertChapterNode(node *suwayomi.ChapterNode, mangaID string) *Chapter {
-	uploadDate := time.Unix(node.UploadDate/1000, 0)
+	// Parse uploadDate - it's a Unix timestamp in milliseconds as a string
+	uploadDateMs, err := strconv.ParseInt(node.UploadDate, 10, 64)
+	var uploadDate time.Time
+	if err == nil {
+		uploadDate = time.Unix(uploadDateMs/1000, 0)
+	}
 
 	return &Chapter{
 		ID:             strconv.Itoa(node.ID),
