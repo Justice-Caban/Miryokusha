@@ -226,10 +226,8 @@ func (s *SuwayomiSource) convertMangaNode(node *suwayomi.MangaNode) *Manga {
 		UnreadCount:   node.UnreadCount,
 		DownloadCount: node.DownloadCount,
 		ChapterCount:  node.GetChapterCount(),
+		// LastReadAt tracked locally, not provided by Suwayomi schema
 	}
-
-	// Note: LastReadAt field doesn't exist in Suwayomi schema
-	// LastReadAt remains nil
 
 	// Add source info if available
 	if node.Source != nil {
