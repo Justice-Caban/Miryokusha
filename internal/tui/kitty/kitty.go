@@ -171,20 +171,31 @@ func ResizeImage(imgData []byte, maxWidth, maxHeight int) ([]byte, error) {
 
 // RenderImage renders an image using the Kitty graphics protocol
 func (ir *ImageRenderer) RenderImage(imgData []byte, opts ImageOptions) (string, error) {
-	// For manga pages, we want to preserve as much detail as possible
-	// Modern terminals can have very small cells or high DPI displays
-	// Use generous pixel estimates: ~20-30 pixels per cell width, ~40-50 pixels per cell height
-	// This ensures images are rendered at high quality
-	pixelWidth := opts.Width * 30
-	pixelHeight := opts.Height * 50
+	// DON'T pre-resize - let Kitty's protocol handle scaling
+	// This preserves maximum quality and lets Kitty scale based on actual cell dimensions
+	// The c and r parameters tell Kitty how many cells to fill, and it will scale accordingly
 
-	resizedData, err := ResizeImage(imgData, pixelWidth, pixelHeight)
+	// Just re-encode as PNG to ensure consistent format
+	img, _, err := image.Decode(bytes.NewReader(imgData))
 	if err != nil {
-		return "", fmt.Errorf("failed to resize image: %w", err)
+		// Try to use original data if decode fails
+		return ir.renderImageDirect(imgData, opts)
 	}
 
+	// Re-encode as PNG
+	var buf bytes.Buffer
+	if err := imaging.Encode(&buf, img, imaging.PNG); err != nil {
+		// Fallback to original data
+		return ir.renderImageDirect(imgData, opts)
+	}
+
+	return ir.renderImageDirect(buf.Bytes(), opts)
+}
+
+// renderImageDirect sends image data directly to Kitty without resizing
+func (ir *ImageRenderer) renderImageDirect(imgData []byte, opts ImageOptions) (string, error) {
 	// Encode image data in base64
-	encoded := base64.StdEncoding.EncodeToString(resizedData)
+	encoded := base64.StdEncoding.EncodeToString(imgData)
 
 	// Build Kitty graphics protocol command
 	// Format: ESC _G <key=value,...> ; <base64 data> ESC \
