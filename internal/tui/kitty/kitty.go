@@ -26,7 +26,6 @@ package kitty
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -37,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BourgeoisBear/rasterm"
 	"github.com/disintegration/imaging"
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
@@ -169,77 +169,27 @@ func ResizeImage(imgData []byte, maxWidth, maxHeight int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// RenderImage renders an image using the Kitty graphics protocol
+// RenderImage renders an image using the Kitty graphics protocol via rasterm library
 func (ir *ImageRenderer) RenderImage(imgData []byte, opts ImageOptions) (string, error) {
-	// DON'T pre-resize - let Kitty's protocol handle scaling
-	// This preserves maximum quality and lets Kitty scale based on actual cell dimensions
-	// The c and r parameters tell Kitty how many cells to fill, and it will scale accordingly
-
-	// Just re-encode as PNG to ensure consistent format
+	// Decode the image
 	img, _, err := image.Decode(bytes.NewReader(imgData))
 	if err != nil {
-		// Try to use original data if decode fails
-		return ir.renderImageDirect(imgData, opts)
+		return "", fmt.Errorf("failed to decode image: %w", err)
 	}
 
-	// Re-encode as PNG
+	// Use the battle-tested rasterm library for Kitty protocol
 	var buf bytes.Buffer
-	if err := imaging.Encode(&buf, img, imaging.PNG); err != nil {
-		// Fallback to original data
-		return ir.renderImageDirect(imgData, opts)
+	kittyOpts := rasterm.KittyImgOpts{
+		DstCols: uint32(opts.Width),  // Display width in terminal columns
+		DstRows: uint32(opts.Height), // Display height in terminal rows
+		ImageId: opts.ImageID,         // Unique image ID
 	}
 
-	return ir.renderImageDirect(buf.Bytes(), opts)
-}
-
-// renderImageDirect sends image data directly to Kitty without resizing
-func (ir *ImageRenderer) renderImageDirect(imgData []byte, opts ImageOptions) (string, error) {
-	// Encode image data in base64
-	encoded := base64.StdEncoding.EncodeToString(imgData)
-
-	// Build Kitty graphics protocol command
-	// Format: ESC _G <key=value,...> ; <base64 data> ESC \
-	var sb strings.Builder
-
-	// Chunked transmission for large images
-	const chunkSize = 4096
-	chunks := splitIntoChunks(encoded, chunkSize)
-
-	for i, chunk := range chunks {
-		sb.WriteString(APC)
-		sb.WriteString("G")
-
-		// Parameters
-		params := []string{
-			fmt.Sprintf("i=%d", opts.ImageID), // Image ID
-			"f=100",                             // Format: PNG
-		}
-
-		if i == 0 {
-			// First chunk
-			params = append(params, "a=T") // Action: transmit and display
-			if opts.Width > 0 {
-				params = append(params, fmt.Sprintf("c=%d", opts.Width))
-			}
-			if opts.Height > 0 {
-				params = append(params, fmt.Sprintf("r=%d", opts.Height))
-			}
-		}
-
-		// More chunks to come?
-		if i < len(chunks)-1 {
-			params = append(params, "m=1") // More data coming
-		} else {
-			params = append(params, "m=0") // Last chunk
-		}
-
-		sb.WriteString(strings.Join(params, ","))
-		sb.WriteString(";")
-		sb.WriteString(chunk)
-		sb.WriteString(ST)
+	if err := rasterm.KittyWriteImage(&buf, img, kittyOpts); err != nil {
+		return "", fmt.Errorf("failed to encode image with Kitty protocol: %w", err)
 	}
 
-	return sb.String(), nil
+	return buf.String(), nil
 }
 
 // RenderImageFromURL fetches an image from a URL and renders it
@@ -293,18 +243,6 @@ func CreatePlaceholder(width, height int, text string) string {
 }
 
 // Helper functions
-
-func splitIntoChunks(s string, chunkSize int) []string {
-	var chunks []string
-	for i := 0; i < len(s); i += chunkSize {
-		end := i + chunkSize
-		if end > len(s) {
-			end = len(s)
-		}
-		chunks = append(chunks, s[i:end])
-	}
-	return chunks
-}
 
 func centerText(text string, width int) string {
 	if len(text) >= width {
