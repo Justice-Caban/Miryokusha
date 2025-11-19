@@ -14,6 +14,7 @@ import (
 	"github.com/Justice-Caban/Miryokusha/internal/tui/extensions"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/history"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/library"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/manga"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/reader"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/settings"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,6 +27,7 @@ type ViewType string
 const (
 	ViewHome       ViewType = "home"
 	ViewLibrary    ViewType = "library"
+	ViewManga      ViewType = "manga"
 	ViewReader     ViewType = "reader"
 	ViewHistory    ViewType = "history"
 	ViewBrowse     ViewType = "browse"
@@ -54,6 +56,7 @@ type AppModel struct {
 
 	// View models
 	libraryModel     library.Model
+	mangaModel       *manga.Model
 	historyModel     history.Model
 	extensionsModel  extensions.Model
 	downloadsModel   tuiDownloads.Model
@@ -227,6 +230,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case library.OpenMangaMsg:
+		// Open manga details view from library
+		mangaModel := manga.NewModel(msg.Manga, m.sourceManager, m.storage)
+		m.mangaModel = &mangaModel
+		m.currentView = ViewManga
+		return m, m.mangaModel.Init()
+
+	case manga.OpenChapterMsg:
+		// Open reader from manga details view
+		readerModel := reader.NewModel(msg.Manga, msg.Chapter, m.sourceManager, m.storage)
+		m.readerModel = &readerModel
+		m.currentView = ViewReader
+		return m, m.readerModel.Init()
+
 	case OpenReaderMsg:
 		// Launch reader with manga and chapter
 		readerModel := reader.NewModel(msg.Manga, msg.Chapter, m.sourceManager, m.storage)
@@ -294,12 +311,28 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.currentView != ViewHome {
 			switch msg.String() {
 			case "esc":
-				// Save reader session before closing
-				if m.currentView == ViewReader && m.readerModel != nil {
-					m.readerModel.SaveSession()
+				// Handle back navigation based on current view
+				switch m.currentView {
+				case ViewReader:
+					// Save reader session and go back to manga details if available
+					if m.readerModel != nil {
+						m.readerModel.SaveSession()
+					}
+					if m.mangaModel != nil {
+						m.currentView = ViewManga
+						m.readerModel = nil
+					} else {
+						m.currentView = ViewHome
+						m.readerModel = nil
+					}
+				case ViewManga:
+					// Go back to library from manga details
+					m.currentView = ViewLibrary
+					m.mangaModel = nil
+				default:
+					// Default: go back to home
+					m.currentView = ViewHome
 				}
-				m.currentView = ViewHome
-				m.readerModel = nil
 				return m, nil
 			}
 		}
@@ -355,6 +388,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.libraryModel, cmd = m.libraryModel.Update(msg)
 		return m, cmd
 
+	case ViewManga:
+		if m.mangaModel != nil {
+			updated, cmd := m.mangaModel.Update(msg)
+			m.mangaModel = &updated
+			return m, cmd
+		}
+
 	case ViewHistory:
 		m.historyModel, cmd = m.historyModel.Update(msg)
 		return m, cmd
@@ -400,6 +440,12 @@ func (m AppModel) View() string {
 		content = m.renderHomeView()
 	case ViewLibrary:
 		content = m.libraryModel.View()
+	case ViewManga:
+		if m.mangaModel != nil {
+			content = m.mangaModel.View()
+		} else {
+			content = m.renderPlaceholderView("Manga", "No manga selected")
+		}
 	case ViewReader:
 		if m.readerModel != nil {
 			content = m.readerModel.View()
