@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	_ "golang.org/x/image/webp"
 )
 
 // Protocol control characters
