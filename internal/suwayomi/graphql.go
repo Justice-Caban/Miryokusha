@@ -70,46 +70,38 @@ func (gc *GraphQLClient) Mutate(mutation string, variables map[string]interface{
 
 // execute performs the GraphQL request
 func (gc *GraphQLClient) execute(req GraphQLRequest, result interface{}) error {
-	// Marshal request
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
 	httpReq, err := http.NewRequest("POST", gc.endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	// Execute request
 	resp, err := gc.client.HTTPClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check status code
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Parse response
 	var gqlResp GraphQLResponse
 	if err := json.NewDecoder(resp.Body).Decode(&gqlResp); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Check for GraphQL errors
 	if len(gqlResp.Errors) > 0 {
 		return fmt.Errorf("GraphQL error: %s", gqlResp.Errors[0].Message)
 	}
 
-	// Unmarshal data into result
 	if result != nil {
 		if err := json.Unmarshal(gqlResp.Data, result); err != nil {
 			return fmt.Errorf("failed to unmarshal data: %w", err)
@@ -118,8 +110,6 @@ func (gc *GraphQLClient) execute(req GraphQLRequest, result interface{}) error {
 
 	return nil
 }
-
-// Common GraphQL queries for Suwayomi
 
 // MangaListResponse represents the response from the manga list query
 type MangaListResponse struct {
@@ -140,7 +130,6 @@ type MangaNode struct {
 	Chapters       struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"chapters"`
-	LastReadAt     *int64   `json:"lastReadAt"`
 	LatestUploadedChapter *ChapterNode `json:"latestUploadedChapter"`
 	Source         *SourceNode `json:"source"`
 }
@@ -200,7 +189,6 @@ func (gc *GraphQLClient) GetMangaList(inLibrary bool, limit int, offset int) (*M
 					chapters {
 						totalCount
 					}
-					lastReadAt
 					latestUploadedChapter {
 						id
 						name
@@ -247,7 +235,6 @@ func (gc *GraphQLClient) GetMangaDetails(mangaID int) (*MangaNode, error) {
 				chapters {
 					totalCount
 				}
-				lastReadAt
 				source {
 					id
 					name

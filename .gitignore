@@ -11,9 +11,10 @@
 # Build output directory
 bin/
 
-# Built binary in root directory
+# Built binaries
 miryokusha
-/test-library
+test-library
+schema-tool
 
 # Test binary, built with `go test -c`
 *.test

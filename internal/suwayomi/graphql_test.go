@@ -251,7 +251,6 @@ func TestGraphQLClient_GetMangaDetails(t *testing.T) {
 					"chapters": {
 						"totalCount": 20
 					},
-					"lastReadAt": 1700000000000,
 					"source": {
 						"id": "detailed-source",
 						"name": "Detailed Source",

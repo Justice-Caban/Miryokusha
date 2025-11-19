@@ -226,12 +226,7 @@ func (s *SuwayomiSource) convertMangaNode(node *suwayomi.MangaNode) *Manga {
 		UnreadCount:   node.UnreadCount,
 		DownloadCount: node.DownloadCount,
 		ChapterCount:  node.GetChapterCount(),
-	}
-
-	// Set last read time if available
-	if node.LastReadAt != nil {
-		t := time.Unix(*node.LastReadAt/1000, 0)
-		manga.LastReadAt = &t
+		// LastReadAt tracked locally, not provided by Suwayomi schema
 	}
 
 	// Add source info if available

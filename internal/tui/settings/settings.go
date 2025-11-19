@@ -65,10 +65,15 @@ type Model struct {
 	healthError     error
 
 	// View mode
-	viewMode ViewMode // "main", "logs", "edit_updates"
+	viewMode ViewMode // "main", "logs"
 	logLines int      // Number of log lines to show
 
-	// Edit mode
+	// Navigation
+	cursor      int  // Current cursor position in settings list
+	editMode    bool // Whether we're in edit mode for the selected setting
+	settingsDirty bool // Whether settings have been modified
+
+	// Message display
 	message      string // Status message to display
 	messageType  string // "success", "error", "info"
 	messageTimer int    // Frames remaining to show message
@@ -78,9 +83,28 @@ type Model struct {
 type ViewMode string
 
 const (
-	ViewModeMain        ViewMode = "main"
-	ViewModeLogs        ViewMode = "logs"
-	ViewModeEditUpdates ViewMode = "edit_updates"
+	ViewModeMain ViewMode = "main"
+	ViewModeLogs ViewMode = "logs"
+)
+
+// SettingItem represents a configurable setting
+type SettingItem struct {
+	ID          string
+	Label       string
+	Description string
+	Type        SettingType
+	Value       interface{}
+	MinValue    int
+	MaxValue    int
+}
+
+// SettingType represents the type of setting
+type SettingType int
+
+const (
+	SettingTypeBoolean SettingType = iota
+	SettingTypeInteger
+	SettingTypeAction
 )
 
 // NewModel creates a new settings model
@@ -91,7 +115,116 @@ func NewModel(cfg *config.Config, client *suwayomi.Client, mgr *server.Manager) 
 		serverManager:  mgr,
 		viewMode:       ViewModeMain,
 		logLines:       20,
+		cursor:         0,
+		editMode:       false,
+		settingsDirty:  false,
 	}
+}
+
+// getSettingsList returns the list of configurable settings
+func (m Model) getSettingsList() []SettingItem {
+	if m.config == nil {
+		return []SettingItem{}
+	}
+
+	settings := []SettingItem{
+		// Server Management Actions
+		{
+			ID:          "health_check",
+			Label:       "Perform Health Check",
+			Description: "Check connection to Suwayomi server",
+			Type:        SettingTypeAction,
+		},
+		{
+			ID:          "reload_config",
+			Label:       "Reload Configuration",
+			Description: "Reload config file from disk",
+			Type:        SettingTypeAction,
+		},
+
+		// Smart Updates Settings
+		{
+			ID:          "smart_update",
+			Label:       "Smart Updates",
+			Description: "Enable intelligent update scheduling",
+			Type:        SettingTypeBoolean,
+			Value:       m.config.Updates.SmartUpdate,
+		},
+		{
+			ID:          "update_only_ongoing",
+			Label:       "Update Only Ongoing",
+			Description:  "Only update manga that are still ongoing",
+			Type:        SettingTypeBoolean,
+			Value:       m.config.Updates.UpdateOnlyOngoing,
+		},
+		{
+			ID:          "update_only_started",
+			Label:       "Update Only Started",
+			Description: "Only update manga you've started reading",
+			Type:        SettingTypeBoolean,
+			Value:       m.config.Updates.UpdateOnlyStarted,
+		},
+		{
+			ID:          "auto_update",
+			Label:       "Auto-Update",
+			Description: "Automatically check for new chapters",
+			Type:        SettingTypeBoolean,
+			Value:       m.config.Updates.AutoUpdateEnabled,
+		},
+		{
+			ID:          "min_interval",
+			Label:       "Min Update Interval (hours)",
+			Description: "Minimum hours between updates",
+			Type:        SettingTypeInteger,
+			Value:       m.config.Updates.MinIntervalHours,
+			MinValue:    1,
+			MaxValue:    168,
+		},
+		{
+			ID:          "auto_interval",
+			Label:       "Auto-Update Interval (hours)",
+			Description: "Hours between automatic update checks",
+			Type:        SettingTypeInteger,
+			Value:       m.config.Updates.AutoUpdateIntervalHrs,
+			MinValue:    1,
+			MaxValue:    168,
+		},
+	}
+
+	// Add server management actions if enabled
+	if m.config.ServerManagement.Enabled && m.serverManager != nil {
+		status := m.serverManager.GetStatus()
+		if status == server.StatusStopped {
+			settings = append(settings, SettingItem{
+				ID:          "start_server",
+				Label:       "Start Suwayomi Server",
+				Description: "Start the local Suwayomi server",
+				Type:        SettingTypeAction,
+			})
+		} else if status == server.StatusRunning {
+			settings = append(settings, SettingItem{
+				ID:          "stop_server",
+				Label:       "Stop Suwayomi Server",
+				Description: "Stop the local Suwayomi server",
+				Type:        SettingTypeAction,
+			})
+			settings = append(settings, SettingItem{
+				ID:          "restart_server",
+				Label:       "Restart Suwayomi Server",
+				Description: "Restart the local Suwayomi server",
+				Type:        SettingTypeAction,
+			})
+		}
+
+		settings = append(settings, SettingItem{
+			ID:          "view_logs",
+			Label:       "View Server Logs",
+			Description: "Show Suwayomi server logs",
+			Type:        SettingTypeAction,
+		})
+	}
+
+	return settings
 }
 
 // Init initializes the settings model
@@ -108,85 +241,69 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle edit mode separately
-		if m.viewMode == ViewModeEditUpdates {
-			return m.handleEditUpdatesInput(msg)
+		// Handle logs view separately
+		if m.viewMode == ViewModeLogs {
+			switch msg.String() {
+			case "l", "L", "esc":
+				m.viewMode = ViewModeMain
+				return m, nil
+			case "c", "C":
+				if m.serverManager != nil {
+					m.serverManager.ClearLogs()
+					m.setMessage("Logs cleared", "success")
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Main view navigation
+		settings := m.getSettingsList()
+		if len(settings) == 0 {
+			return m, nil
 		}
 
 		switch msg.String() {
-		case "h", "H":
-			// Perform health check
-			return m, m.performHealthCheck
-
-		case "r", "R":
-			// Reload configuration
-			cfg, err := config.Load()
-			if err == nil {
-				m.config = cfg
-				m.setMessage("Configuration reloaded", "success")
-			} else {
-				m.setMessage(fmt.Sprintf("Failed to reload: %v", err), "error")
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
 			}
 			return m, nil
 
-		case "e", "E":
-			// Enter edit updates mode
-			if m.viewMode == ViewModeMain {
-				m.viewMode = ViewModeEditUpdates
+		case "down", "j":
+			if m.cursor < len(settings)-1 {
+				m.cursor++
+			}
+			return m, nil
+
+		case "enter", " ":
+			return m.handleSettingAction(settings[m.cursor])
+
+		case "+", "=", "right", "l":
+			// Increase integer value
+			setting := settings[m.cursor]
+			if setting.Type == SettingTypeInteger {
+				return m.adjustIntegerSetting(setting.ID, 1)
+			}
+			return m, nil
+
+		case "-", "_", "left", "h":
+			// Decrease integer value
+			setting := settings[m.cursor]
+			if setting.Type == SettingTypeInteger {
+				return m.adjustIntegerSetting(setting.ID, -1)
 			}
 			return m, nil
 
 		case "s", "S":
-			// Start server
-			if m.serverManager != nil && m.config.ServerManagement.Enabled {
-				if m.serverManager.GetStatus() == server.StatusStopped {
-					if err := m.serverManager.Start(); err != nil {
-						m.setMessage(fmt.Sprintf("Failed to start: %v", err), "error")
-					} else {
-						m.setMessage("Server starting...", "success")
-					}
-				}
-			}
-			return m, nil
-
-		case "x", "X":
-			// Stop server
-			if m.serverManager != nil {
-				if m.serverManager.GetStatus() == server.StatusRunning {
-					if err := m.serverManager.Stop(); err != nil {
-						m.setMessage(fmt.Sprintf("Failed to stop: %v", err), "error")
-					} else {
-						m.setMessage("Server stopped", "success")
-					}
-				}
-			}
-			return m, nil
-
-		case "t", "T":
-			// Restart server
-			if m.serverManager != nil && m.config.ServerManagement.Enabled {
-				if err := m.serverManager.Restart(); err != nil {
-					m.setMessage(fmt.Sprintf("Failed to restart: %v", err), "error")
+			// Save settings
+			if m.settingsDirty {
+				if err := m.saveConfig(); err != nil {
+					m.setMessage(fmt.Sprintf("Failed to save: %v", err), "error")
 				} else {
-					m.setMessage("Server restarting...", "success")
+					m.setMessage("Settings saved successfully", "success")
+					m.settingsDirty = false
 				}
-			}
-			return m, nil
-
-		case "l", "L":
-			// Toggle logs view
-			if m.viewMode == ViewModeMain {
-				m.viewMode = ViewModeLogs
-			} else {
-				m.viewMode = ViewModeMain
-			}
-			return m, nil
-
-		case "c", "C":
-			// Clear logs
-			if m.serverManager != nil {
-				m.serverManager.ClearLogs()
-				m.setMessage("Logs cleared", "success")
 			}
 			return m, nil
 		}
@@ -213,36 +330,28 @@ func (m Model) View() string {
 	// Show message if present
 	if m.messageTimer > 0 && m.message != "" {
 		b.WriteString(m.renderMessage())
-		b.WriteString("\n")
+		b.WriteString("\n\n")
 	}
 
 	// Show different views based on mode
 	switch m.viewMode {
 	case ViewModeLogs:
 		b.WriteString(m.renderServerLogs())
-	case ViewModeEditUpdates:
-		b.WriteString(m.renderEditUpdates())
 	default:
-		// Server Configuration Section
-		b.WriteString(m.renderServerConfig())
-		b.WriteString("\n")
-
-		// Server Management Section
-		if m.config != nil && m.config.ServerManagement.Enabled {
-			b.WriteString(m.renderServerManagement())
-			b.WriteString("\n")
+		// Show server health if available
+		if m.serverInfo != nil || m.checkingHealth || m.healthError != nil {
+			b.WriteString(m.renderServerHealth())
+			b.WriteString("\n\n")
 		}
 
-		// Server Health Section
-		b.WriteString(m.renderServerHealth())
-		b.WriteString("\n")
+		// Dirty indicator
+		if m.settingsDirty {
+			b.WriteString(lipgloss.NewStyle().Foreground(theme.ColorWarning).Render("● Unsaved changes"))
+			b.WriteString("\n\n")
+		}
 
-		// Smart Updates Section
-		b.WriteString(m.renderSmartUpdates())
-		b.WriteString("\n")
-
-		// Application Info Section
-		b.WriteString(m.renderAppInfo())
+		// Interactive settings list
+		b.WriteString(m.renderSettingsList())
 	}
 
 	b.WriteString("\n")
@@ -250,7 +359,24 @@ func (m Model) View() string {
 	// Footer
 	b.WriteString(m.renderFooter())
 
-	return b.String()
+	// Apply consistent horizontal padding/centering
+	content := b.String()
+	maxWidth := 100
+	if m.width < maxWidth {
+		maxWidth = m.width - 4
+	}
+
+	contentStyle := lipgloss.NewStyle().
+		Width(maxWidth).
+		Padding(0, 2)
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Top,
+		contentStyle.Render(content),
+	)
 }
 
 // renderServerConfig renders the server configuration section
@@ -490,32 +616,26 @@ func (m Model) renderFooter() string {
 	switch m.viewMode {
 	case ViewModeLogs:
 		controls = []string{
-			"l: back to main",
+			"l/Esc: back",
 			"c: clear logs",
-			"Esc: back",
-		}
-	case ViewModeEditUpdates:
-		controls = []string{
-			"1-6: toggle settings",
-			"+/-: adjust values",
-			"s: save",
-			"Esc: cancel",
 		}
 	default:
-		controls = []string{
-			"h: health check",
-			"r: reload config",
-			"e: edit updates",
-		}
+		settings := m.getSettingsList()
+		if len(settings) > 0 && m.cursor < len(settings) {
+			currentSetting := settings[m.cursor]
 
-		if m.config != nil && m.config.ServerManagement.Enabled && m.serverManager != nil {
-			status := m.serverManager.GetStatus()
-			if status == server.StatusStopped {
-				controls = append(controls, "s: start server")
-			} else if status == server.StatusRunning {
-				controls = append(controls, "x: stop server", "t: restart")
+			controls = []string{
+				"↑↓/jk: navigate",
+				"Enter: activate",
 			}
-			controls = append(controls, "l: view logs")
+
+			if currentSetting.Type == SettingTypeInteger {
+				controls = append(controls, "+/-/←→: adjust")
+			}
+
+			if m.settingsDirty {
+				controls = append(controls, "s: save")
+			}
 		}
 
 		controls = append(controls, "Esc: back")
@@ -587,116 +707,159 @@ func (m Model) renderMessage() string {
 	return style.Render(m.message)
 }
 
-// handleEditUpdatesInput handles keyboard input in edit mode
-func (m Model) handleEditUpdatesInput(msg tea.KeyMsg) (Model, tea.Cmd) {
+// handleSettingAction handles Enter key press on a setting
+func (m Model) handleSettingAction(setting SettingItem) (Model, tea.Cmd) {
 	if m.config == nil {
 		return m, nil
 	}
 
-	switch msg.String() {
-	case "esc":
-		// Cancel editing and return to main view
-		m.viewMode = ViewModeMain
+	switch setting.ID {
+	case "health_check":
+		return m, m.performHealthCheck
+
+	case "reload_config":
+		cfg, err := config.Load()
+		if err == nil {
+			m.config = cfg
+			m.settingsDirty = false
+			m.setMessage("Configuration reloaded", "success")
+		} else {
+			m.setMessage(fmt.Sprintf("Failed to reload: %v", err), "error")
+		}
 		return m, nil
 
-	case "1":
-		// Toggle smart updates
+	case "start_server":
+		if m.serverManager != nil {
+			if err := m.serverManager.Start(); err != nil {
+				m.setMessage(fmt.Sprintf("Failed to start: %v", err), "error")
+			} else {
+				m.setMessage("Server starting...", "success")
+			}
+		}
+		return m, nil
+
+	case "stop_server":
+		if m.serverManager != nil {
+			if err := m.serverManager.Stop(); err != nil {
+				m.setMessage(fmt.Sprintf("Failed to stop: %v", err), "error")
+			} else {
+				m.setMessage("Server stopped", "success")
+			}
+		}
+		return m, nil
+
+	case "restart_server":
+		if m.serverManager != nil {
+			if err := m.serverManager.Restart(); err != nil {
+				m.setMessage(fmt.Sprintf("Failed to restart: %v", err), "error")
+			} else {
+				m.setMessage("Server restarting...", "success")
+			}
+		}
+		return m, nil
+
+	case "view_logs":
+		m.viewMode = ViewModeLogs
+		return m, nil
+
+	case "smart_update":
 		m.config.Updates.SmartUpdate = !m.config.Updates.SmartUpdate
+		m.settingsDirty = true
+		return m, nil
 
-	case "2":
-		// Toggle update only ongoing
+	case "update_only_ongoing":
 		m.config.Updates.UpdateOnlyOngoing = !m.config.Updates.UpdateOnlyOngoing
+		m.settingsDirty = true
+		return m, nil
 
-	case "3":
-		// Toggle update only started
+	case "update_only_started":
 		m.config.Updates.UpdateOnlyStarted = !m.config.Updates.UpdateOnlyStarted
+		m.settingsDirty = true
+		return m, nil
 
-	case "4":
-		// Toggle auto-update
+	case "auto_update":
 		m.config.Updates.AutoUpdateEnabled = !m.config.Updates.AutoUpdateEnabled
+		m.settingsDirty = true
+		return m, nil
+	}
 
-	case "+", "=":
-		// Increase min interval hours
-		if m.config.Updates.MinIntervalHours < 168 {
-			m.config.Updates.MinIntervalHours++
+	return m, nil
+}
+
+// adjustIntegerSetting adjusts an integer setting by a delta
+func (m Model) adjustIntegerSetting(settingID string, delta int) (Model, tea.Cmd) {
+	if m.config == nil {
+		return m, nil
+	}
+
+	switch settingID {
+	case "min_interval":
+		newValue := m.config.Updates.MinIntervalHours + delta
+		if newValue >= 1 && newValue <= 168 {
+			m.config.Updates.MinIntervalHours = newValue
+			m.settingsDirty = true
 		}
 
-	case "-", "_":
-		// Decrease min interval hours
-		if m.config.Updates.MinIntervalHours > 1 {
-			m.config.Updates.MinIntervalHours--
-		}
-
-	case "s", "S":
-		// Save configuration
-		if err := m.saveConfig(); err != nil {
-			m.setMessage(fmt.Sprintf("Failed to save: %v", err), "error")
-		} else {
-			m.setMessage("Configuration saved successfully", "success")
-			m.viewMode = ViewModeMain
+	case "auto_interval":
+		newValue := m.config.Updates.AutoUpdateIntervalHrs + delta
+		if newValue >= 1 && newValue <= 168 {
+			m.config.Updates.AutoUpdateIntervalHrs = newValue
+			m.settingsDirty = true
 		}
 	}
 
 	return m, nil
 }
 
-// renderEditUpdates renders the edit updates interface
-func (m Model) renderEditUpdates() string {
+// renderSettingsList renders the interactive settings list
+func (m Model) renderSettingsList() string {
 	var b strings.Builder
 
-	b.WriteString(sectionStyle.Render("Edit Smart Updates Settings"))
-	b.WriteString("\n\n")
-
-	if m.config == nil {
-		b.WriteString(mutedStyle.Render("No configuration loaded"))
-		return b.String()
+	settings := m.getSettingsList()
+	if len(settings) == 0 {
+		return mutedStyle.Render("No settings available")
 	}
 
-	// Smart update toggle
-	smartUpdateValue := "Disabled"
-	if m.config.Updates.SmartUpdate {
-		smartUpdateValue = successStyle.Render("Enabled ✓")
+	// Render each setting with cursor highlighting
+	for i, setting := range settings {
+		isCursor := i == m.cursor
+
+		// Build the setting line
+		var line string
+		switch setting.Type {
+		case SettingTypeBoolean:
+			boolVal, _ := setting.Value.(bool)
+			status := "Disabled"
+			if boolVal {
+				status = successStyle.Render("✓ Enabled")
+			}
+			line = fmt.Sprintf("%s: %s", setting.Label, status)
+
+		case SettingTypeInteger:
+			intVal, _ := setting.Value.(int)
+			line = fmt.Sprintf("%s: %d", setting.Label, intVal)
+
+		case SettingTypeAction:
+			line = setting.Label + " →"
+		}
+
+		// Apply cursor style
+		if isCursor {
+			line = theme.HighlightStyle.Render("▸ " + line)
+		} else {
+			line = "  " + line
+		}
+
+		b.WriteString(line)
+		b.WriteString("\n")
+
+		// Show description for selected item
+		if isCursor && setting.Description != "" {
+			desc := mutedStyle.Render("  " + setting.Description)
+			b.WriteString(desc)
+			b.WriteString("\n")
+		}
 	}
-	b.WriteString(m.renderConfigLine("[1] Smart Updates", smartUpdateValue))
-
-	// Only ongoing toggle
-	onlyOngoingValue := "No"
-	if m.config.Updates.UpdateOnlyOngoing {
-		onlyOngoingValue = successStyle.Render("Yes ✓")
-	}
-	b.WriteString(m.renderConfigLine("[2] Only Ongoing", onlyOngoingValue))
-
-	// Only started toggle
-	onlyStartedValue := "No"
-	if m.config.Updates.UpdateOnlyStarted {
-		onlyStartedValue = successStyle.Render("Yes ✓")
-	}
-	b.WriteString(m.renderConfigLine("[3] Only Started", onlyStartedValue))
-
-	// Auto-update toggle
-	autoUpdateValue := "Disabled"
-	if m.config.Updates.AutoUpdateEnabled {
-		autoUpdateValue = successStyle.Render("Enabled ✓")
-	}
-	b.WriteString(m.renderConfigLine("[4] Auto-Update", autoUpdateValue))
-
-	b.WriteString("\n")
-
-	// Min interval hours (adjustable with +/-)
-	b.WriteString(m.renderConfigLine("[+/-] Min Interval", fmt.Sprintf("%d hours", m.config.Updates.MinIntervalHours)))
-
-	// Read-only settings
-	b.WriteString("\n")
-	b.WriteString(sectionStyle.Render("Advanced Settings (edit config.yaml)"))
-	b.WriteString("\n")
-	b.WriteString(m.renderConfigLine("Max Failures", fmt.Sprintf("%d", m.config.Updates.MaxConsecutiveFailures)))
-	b.WriteString(m.renderConfigLine("Interval Multiplier", fmt.Sprintf("%.1fx", m.config.Updates.IntervalMultiplier)))
-	if m.config.Updates.AutoUpdateEnabled {
-		b.WriteString(m.renderConfigLine("Auto-Update Interval", fmt.Sprintf("%d hours", m.config.Updates.AutoUpdateIntervalHrs)))
-	}
-
-	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("Press numbers to toggle • +/- to adjust interval • s to save • Esc to cancel"))
 
 	return b.String()
 }
