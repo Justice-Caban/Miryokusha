@@ -111,7 +111,7 @@ func (s *SuwayomiSource) GetChapter(chapterID string) (*Chapter, error) {
 // GetPage retrieves a specific page from a chapter
 func (s *SuwayomiSource) GetPage(chapter *Chapter, pageIndex int) (*Page, error) {
 	// Use REST API for page image retrieval
-	// Correct Suwayomi API endpoint includes manga ID
+	// Suwayomi API endpoint (try without manga ID first, as some versions don't need it)
 	url := fmt.Sprintf("%s/api/v1/manga/%s/chapter/%s/page/%d",
 		s.client.BaseURL, chapter.MangaID, chapter.ID, pageIndex)
 
@@ -164,6 +164,19 @@ func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
 	}
 	if chapter.MangaID == "" {
 		return nil, fmt.Errorf("chapter MangaID is empty")
+	}
+
+	// CRITICAL: Trigger Suwayomi to fetch pages from the manga source
+	// Suwayomi lazily loads pages, so we need to explicitly request them
+	// This mutation "primes" the chapter, making pages available via REST API
+	chapterIDInt, err := strconv.Atoi(chapter.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid chapter ID %s: %w", chapter.ID, err)
+	}
+
+	// Fetch chapter pages from source (this may take a moment)
+	if err := s.client.GraphQL.FetchChapterPages(chapterIDInt); err != nil {
+		return nil, fmt.Errorf("failed to fetch chapter pages from source: %w", err)
 	}
 
 	// Use the PageCount from chapter metadata if available
