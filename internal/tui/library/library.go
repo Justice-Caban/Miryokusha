@@ -164,6 +164,13 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "i":
 		// Toggle image display
 		m.showImages = !m.showImages
+
+	case "enter":
+		// Open selected manga
+		if m.cursor < len(m.filteredList) {
+			selectedManga := m.filteredList[m.cursor]
+			return m, m.openManga(selectedManga)
+		}
 	}
 
 	return m, nil
@@ -590,6 +597,11 @@ type libraryErrorMsg struct {
 	err error
 }
 
+// OpenMangaMsg is sent when a manga should be opened
+type OpenMangaMsg struct {
+	Manga *source.Manga
+}
+
 // Commands
 
 func (m Model) loadLibrary() tea.Msg {
@@ -613,5 +625,13 @@ func (m Model) loadLibrary() tea.Msg {
 	return libraryLoadedMsg{
 		manga:       manga,
 		readHistory: readHistory,
+	}
+}
+
+func (m Model) openManga(manga *source.Manga) tea.Cmd {
+	return func() tea.Msg {
+		return OpenMangaMsg{
+			Manga: manga,
+		}
 	}
 }

@@ -1,0 +1,360 @@
+package manga
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Justice-Caban/Miryokusha/internal/source"
+	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Model represents the manga details view
+type Model struct {
+	width  int
+	height int
+
+	// Data
+	manga    *source.Manga
+	chapters []*source.Chapter
+
+	// UI state
+	cursor  int
+	offset  int
+	loading bool
+	err     error
+
+	// Dependencies
+	sourceManager *source.SourceManager
+	storage       *storage.Storage
+}
+
+// NewModel creates a new manga details model
+func NewModel(manga *source.Manga, sm *source.SourceManager, st *storage.Storage) Model {
+	return Model{
+		manga:         manga,
+		chapters:      nil,
+		cursor:        0,
+		offset:        0,
+		loading:       true,
+		sourceManager: sm,
+		storage:       st,
+	}
+}
+
+// Init initializes the manga details model
+func (m Model) Init() tea.Cmd {
+	return m.loadChapters
+}
+
+// Update handles messages for the manga details view
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case tea.KeyMsg:
+		return m.handleKeyPress(msg)
+
+	case chaptersLoadedMsg:
+		m.chapters = msg.chapters
+		m.loading = false
+		m.err = msg.err
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// handleKeyPress handles keyboard input
+func (m Model) handleKeyPress(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if m.loading {
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+			m.adjustOffset()
+		}
+
+	case "down", "j":
+		if m.cursor < len(m.chapters)-1 {
+			m.cursor++
+			m.adjustOffset()
+		}
+
+	case "g":
+		// Go to top
+		m.cursor = 0
+		m.offset = 0
+
+	case "G":
+		// Go to bottom
+		if len(m.chapters) > 0 {
+			m.cursor = len(m.chapters) - 1
+			m.adjustOffset()
+		}
+
+	case "enter":
+		// Open selected chapter in reader
+		if m.cursor < len(m.chapters) {
+			selectedChapter := m.chapters[m.cursor]
+			return m, m.openChapter(selectedChapter)
+		}
+
+	case "r":
+		// Refresh chapter list
+		m.loading = true
+		return m, m.loadChapters
+	}
+
+	return m, nil
+}
+
+// adjustOffset adjusts the scroll offset to keep cursor visible
+func (m *Model) adjustOffset() {
+	visibleItems := m.height - 15 // Account for header and footer
+	if visibleItems < 1 {
+		visibleItems = 1
+	}
+
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	} else if m.cursor >= m.offset+visibleItems {
+		m.offset = m.cursor - visibleItems + 1
+	}
+}
+
+// View renders the manga details view
+func (m Model) View() string {
+	if m.loading {
+		return theme.CenteredText(m.width, m.height, "Loading chapters...")
+	}
+
+	if m.err != nil {
+		return theme.CenteredText(m.width, m.height, fmt.Sprintf("Error: %v\n\nPress 'r' to retry or Esc to go back", m.err))
+	}
+
+	var b strings.Builder
+
+	// Header with manga info
+	b.WriteString(m.renderHeader())
+	b.WriteString("\n\n")
+
+	// Chapter list
+	b.WriteString(m.renderChapterList())
+	b.WriteString("\n")
+
+	// Footer
+	b.WriteString(m.renderFooter())
+
+	// Apply consistent horizontal padding/centering
+	content := b.String()
+	maxWidth := 120
+	if m.width < maxWidth {
+		maxWidth = m.width - 4
+	}
+
+	contentStyle := lipgloss.NewStyle().
+		Width(maxWidth).
+		Padding(0, 2)
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Top,
+		contentStyle.Render(content),
+	)
+}
+
+// renderHeader renders the manga information header
+func (m Model) renderHeader() string {
+	title := theme.TitleStyle.Render(m.manga.Title)
+
+	var info []string
+
+	// Author
+	if m.manga.Author != "" {
+		info = append(info, fmt.Sprintf("Author: %s", m.manga.Author))
+	}
+
+	// Status
+	if m.manga.Status != "" {
+		info = append(info, fmt.Sprintf("Status: %s", m.manga.Status))
+	}
+
+	// Chapter count
+	chapterCountStr := fmt.Sprintf("%d chapters", len(m.chapters))
+	if m.manga.UnreadCount > 0 {
+		chapterCountStr += fmt.Sprintf(" (%d unread)", m.manga.UnreadCount)
+	}
+	info = append(info, chapterCountStr)
+
+	infoStr := lipgloss.NewStyle().
+		Foreground(theme.ColorSecondary).
+		Render(strings.Join(info, " • "))
+
+	return title + "\n" + infoStr
+}
+
+// renderChapterList renders the list of chapters
+func (m Model) renderChapterList() string {
+	if len(m.chapters) == 0 {
+		return theme.MutedStyle.Render("No chapters available")
+	}
+
+	var b strings.Builder
+
+	b.WriteString(lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.ColorPrimary).
+		Render("Chapters") + "\n\n")
+
+	visibleItems := m.height - 15
+	if visibleItems < 1 {
+		visibleItems = 1
+	}
+
+	start := m.offset
+	end := m.offset + visibleItems
+	if end > len(m.chapters) {
+		end = len(m.chapters)
+	}
+
+	for i := start; i < end; i++ {
+		chapter := m.chapters[i]
+		isCursor := i == m.cursor
+
+		// Item style
+		itemStyle := lipgloss.NewStyle()
+		if isCursor {
+			itemStyle = itemStyle.
+				Background(theme.ColorPrimary).
+				Foreground(lipgloss.Color("#000000")).
+				Bold(true).
+				Width(m.width - 8)
+		}
+
+		// Read indicator
+		readIndicator := "  "
+		if chapter.IsRead {
+			readIndicator = "✓ "
+		}
+
+		// Downloaded indicator
+		downloadIndicator := ""
+		if chapter.IsDownloaded {
+			downloadIndicator = " 📥"
+		}
+
+		// Bookmarked indicator
+		bookmarkIndicator := ""
+		if chapter.IsBookmarked {
+			bookmarkIndicator = " 🔖"
+		}
+
+		// Format chapter title
+		chapterTitle := chapter.Title
+		if chapterTitle == "" {
+			chapterTitle = fmt.Sprintf("Chapter %.1f", chapter.ChapterNumber)
+		}
+
+		// Build line
+		line := fmt.Sprintf("%s %s%s%s",
+			readIndicator,
+			chapterTitle,
+			downloadIndicator,
+			bookmarkIndicator,
+		)
+
+		b.WriteString(itemStyle.Render(line))
+		b.WriteString("\n")
+	}
+
+	// Scroll indicator
+	if len(m.chapters) > visibleItems {
+		scrollInfo := fmt.Sprintf("Showing %d-%d of %d", start+1, end, len(m.chapters))
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(theme.ColorMuted).
+			Render(scrollInfo))
+	}
+
+	return b.String()
+}
+
+// renderFooter renders the footer with controls
+func (m Model) renderFooter() string {
+	controls := []string{
+		"↑↓/jk: navigate",
+		"g/G: top/bottom",
+		"Enter: read chapter",
+		"r: refresh",
+		"Esc: back",
+	}
+
+	return theme.HelpStyle.Render(strings.Join(controls, " • "))
+}
+
+// Messages
+
+type chaptersLoadedMsg struct {
+	chapters []*source.Chapter
+	err      error
+}
+
+// OpenChapterMsg is sent when a chapter should be opened in the reader
+type OpenChapterMsg struct {
+	Manga   *source.Manga
+	Chapter *source.Chapter
+}
+
+// Commands
+
+func (m Model) loadChapters() tea.Msg {
+	// Get the appropriate source
+	var src source.Source
+	for _, s := range m.sourceManager.GetSources() {
+		if s.GetID() == m.manga.SourceID {
+			src = s
+			break
+		}
+	}
+
+	if src == nil {
+		return chaptersLoadedMsg{
+			chapters: nil,
+			err:      fmt.Errorf("source not found: %s", m.manga.SourceID),
+		}
+	}
+
+	// Load chapters
+	chapters, err := src.ListChapters(m.manga.ID)
+	if err != nil {
+		return chaptersLoadedMsg{
+			chapters: nil,
+			err:      err,
+		}
+	}
+
+	return chaptersLoadedMsg{
+		chapters: chapters,
+		err:      nil,
+	}
+}
+
+func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
+	return func() tea.Msg {
+		return OpenChapterMsg{
+			Manga:   m.manga,
+			Chapter: chapter,
+		}
+	}
+}
