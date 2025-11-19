@@ -38,6 +38,8 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
 )
 
@@ -108,6 +110,13 @@ func (ir *ImageRenderer) FetchImage(url string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read image data: %w", err)
 	}
 
+	// Diagnostic: log content type and size
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "unknown"
+	}
+	_ = contentType // Available for debugging: shows image/jpeg, image/png, etc.
+
 	// Cache the image
 	ir.cache[url] = data
 
@@ -117,10 +126,20 @@ func (ir *ImageRenderer) FetchImage(url string) ([]byte, error) {
 // ResizeImage resizes an image to fit within the specified dimensions
 func ResizeImage(imgData []byte, maxWidth, maxHeight int) ([]byte, error) {
 	// Decode image
-	img, _, err := image.Decode(bytes.NewReader(imgData))
+	img, format, err := image.Decode(bytes.NewReader(imgData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode image: %w", err)
+		// Provide diagnostic information
+		header := ""
+		if len(imgData) > 16 {
+			header = fmt.Sprintf("%x", imgData[:16])
+		} else if len(imgData) > 0 {
+			header = fmt.Sprintf("%x", imgData)
+		}
+		return nil, fmt.Errorf("failed to decode image (first bytes: %s, data len: %d): %w", header, len(imgData), err)
 	}
+
+	// Log successful decode for debugging
+	_ = format // format is detected (jpeg, png, gif, webp, etc.)
 
 	// Calculate new dimensions while preserving aspect ratio
 	bounds := img.Bounds()
