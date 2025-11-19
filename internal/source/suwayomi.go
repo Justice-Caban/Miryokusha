@@ -163,11 +163,16 @@ func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
 	}
 
 	var pages []*Page
+	var firstError error
 
 	// Fetch all pages based on PageCount
 	for pageIndex := 0; pageIndex < maxPages; pageIndex++ {
 		page, err := s.GetPage(chapter, pageIndex)
 		if err != nil {
+			// Save the first error for diagnostics
+			if firstError == nil {
+				firstError = err
+			}
 			// If we can't get the page, assume we've reached the end
 			break
 		}
@@ -176,6 +181,10 @@ func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
 	}
 
 	if len(pages) == 0 {
+		if firstError != nil {
+			return nil, fmt.Errorf("no pages found for chapter %s (manga %s): first page error: %w",
+				chapter.ID, chapter.MangaID, firstError)
+		}
 		return nil, fmt.Errorf("no pages found for chapter %s (manga %s)", chapter.ID, chapter.MangaID)
 	}
 
