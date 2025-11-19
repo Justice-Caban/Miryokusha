@@ -323,7 +323,13 @@ func (m Model) View() string {
 		b.WriteString(m.renderFooter())
 	}
 
-	return b.String()
+	// CRITICAL: Ensure output is exactly terminal height to prevent scrolling
+	// Use lipgloss.Place to constrain the content to exact dimensions
+	content := b.String()
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Render(content)
 }
 
 // renderHeader renders the chapter and page information
