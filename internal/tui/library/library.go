@@ -359,13 +359,17 @@ func (m Model) View() string {
 		Width(maxWidth).
 		Padding(0, 2)
 
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Top,
-		contentStyle.Render(content),
-	)
+	// CRITICAL: Ensure exact dimensions to prevent scrolling
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Render(lipgloss.Place(
+			m.width,
+			m.height,
+			lipgloss.Center,
+			lipgloss.Top,
+			contentStyle.Render(content),
+		))
 }
 
 // renderHeader renders the library header
