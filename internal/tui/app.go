@@ -120,7 +120,7 @@ func NewAppModel() AppModel {
 	}
 
 	// Initialize library model
-	libModel := library.NewModel(sm, st)
+	libModel := library.NewModel(sm, st, cfg.Preferences.ShowThumbnails)
 
 	// Initialize history model
 	histModel := history.NewModel(sm, st)

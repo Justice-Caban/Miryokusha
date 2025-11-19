@@ -6,6 +6,7 @@ import (
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/kitty"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -48,10 +49,12 @@ type Model struct {
 	filterMode   FilterMode
 	searchQuery  string
 	searchActive bool
+	showImages   bool // Toggle for image display
 
 	// Dependencies
 	sourceManager *source.SourceManager
 	storage       *storage.Storage
+	imageRenderer *kitty.ImageRenderer
 
 	// Loading state
 	loading bool
@@ -59,7 +62,7 @@ type Model struct {
 }
 
 // NewModel creates a new library model
-func NewModel(sm *source.SourceManager, st *storage.Storage) Model {
+func NewModel(sm *source.SourceManager, st *storage.Storage, showImages bool) Model {
 	return Model{
 		manga:         make([]*source.Manga, 0),
 		filteredList:  make([]*source.Manga, 0),
@@ -70,6 +73,8 @@ func NewModel(sm *source.SourceManager, st *storage.Storage) Model {
 		filterMode:    FilterAll,
 		sourceManager: sm,
 		storage:       st,
+		imageRenderer: kitty.NewImageRenderer(),
+		showImages:    showImages,
 		loading:       false,
 	}
 }
@@ -155,6 +160,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Cycle filter mode
 		m.filterMode = (m.filterMode + 1) % 4
 		m.applyFiltersAndSort()
+
+	case "i":
+		// Toggle image display
+		m.showImages = !m.showImages
 	}
 
 	return m, nil
@@ -409,7 +418,13 @@ func (m Model) renderMangaList() string {
 
 	var b strings.Builder
 
-	visibleItems := m.height - 10
+	// Adjust visible items based on whether images are shown
+	itemHeight := 1
+	if m.showImages {
+		itemHeight = 6 // Each item takes ~6 rows when showing images
+	}
+
+	visibleItems := (m.height - 10) / itemHeight
 	if visibleItems < 1 {
 		visibleItems = 1
 	}
@@ -424,43 +439,127 @@ func (m Model) renderMangaList() string {
 		manga := m.filteredList[i]
 		isCursor := i == m.cursor
 
-		// Item style
-		itemStyle := lipgloss.NewStyle()
-		if isCursor {
-			itemStyle = itemStyle.
-				Background(theme.ColorPrimary).
-				Foreground(lipgloss.Color("#000000")).
-				Bold(true).
-				Width(m.width - 4)
+		if m.showImages && manga.CoverURL != "" {
+			// Render with image
+			b.WriteString(m.renderMangaItemWithImage(manga, isCursor, uint32(i+1)))
+		} else {
+			// Render text-only
+			b.WriteString(m.renderMangaItemTextOnly(manga, isCursor))
 		}
-
-		// Read indicator
-		readIndicator := "  "
-		if m.readHistory[manga.ID] {
-			readIndicator = "✓ "
-		}
-
-		// Source indicator
-		sourceIndicator := ""
-		switch manga.SourceType {
-		case source.SourceTypeLocal:
-			sourceIndicator = "[Local]"
-		case source.SourceTypeSuwayomi:
-			sourceIndicator = "[Server]"
-		}
-
-		// Format line
-		line := fmt.Sprintf("%s %s %s",
-			readIndicator,
-			manga.Title,
-			lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(sourceIndicator),
-		)
-
-		b.WriteString(itemStyle.Render(line))
 		b.WriteString("\n")
 	}
 
 	return b.String()
+}
+
+// renderMangaItemWithImage renders a manga item with cover image
+func (m Model) renderMangaItemWithImage(manga *source.Manga, isCursor bool, imageID uint32) string {
+	var parts []string
+
+	// Try to render the image
+	imageOpts := kitty.ImageOptions{
+		Width:               5,
+		Height:              5,
+		PreserveAspectRatio: true,
+		ImageID:             imageID,
+	}
+
+	imageStr, err := m.imageRenderer.RenderImageFromURL(manga.CoverURL, imageOpts)
+	if err != nil {
+		// Fallback to placeholder if image fails
+		imageStr = kitty.CreatePlaceholder(5, 5, "[IMG]")
+	}
+
+	// Build manga info text
+	var infoLines []string
+
+	// Read indicator
+	readIndicator := "  "
+	if m.readHistory[manga.ID] {
+		readIndicator = "✓ "
+	}
+
+	// Title line
+	titleStyle := lipgloss.NewStyle()
+	if isCursor {
+		titleStyle = titleStyle.
+			Foreground(theme.ColorPrimary).
+			Bold(true)
+	}
+	infoLines = append(infoLines, titleStyle.Render(readIndicator+manga.Title))
+
+	// Author if available
+	if manga.Author != "" {
+		infoLines = append(infoLines, lipgloss.NewStyle().
+			Foreground(theme.ColorSecondary).
+			Render("  by "+manga.Author))
+	}
+
+	// Source indicator
+	sourceIndicator := ""
+	switch manga.SourceType {
+	case source.SourceTypeLocal:
+		sourceIndicator = "[Local]"
+	case source.SourceTypeSuwayomi:
+		sourceIndicator = "[Server]"
+	}
+	infoLines = append(infoLines, lipgloss.NewStyle().
+		Foreground(theme.ColorMuted).
+		Render("  "+sourceIndicator))
+
+	// Unread count if > 0
+	if manga.UnreadCount > 0 {
+		infoLines = append(infoLines, lipgloss.NewStyle().
+			Foreground(theme.ColorAccent).
+			Render(fmt.Sprintf("  %d unread", manga.UnreadCount)))
+	}
+
+	// Join info lines
+	infoText := strings.Join(infoLines, "\n")
+
+	// Position image and text side by side
+	parts = append(parts, imageStr)
+	parts = append(parts, infoText)
+
+	// Join horizontally
+	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+}
+
+// renderMangaItemTextOnly renders a manga item without images (compact view)
+func (m Model) renderMangaItemTextOnly(manga *source.Manga, isCursor bool) string {
+	// Item style
+	itemStyle := lipgloss.NewStyle()
+	if isCursor {
+		itemStyle = itemStyle.
+			Background(theme.ColorPrimary).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Width(m.width - 4)
+	}
+
+	// Read indicator
+	readIndicator := "  "
+	if m.readHistory[manga.ID] {
+		readIndicator = "✓ "
+	}
+
+	// Source indicator
+	sourceIndicator := ""
+	switch manga.SourceType {
+	case source.SourceTypeLocal:
+		sourceIndicator = "[Local]"
+	case source.SourceTypeSuwayomi:
+		sourceIndicator = "[Server]"
+	}
+
+	// Format line
+	line := fmt.Sprintf("%s %s %s",
+		readIndicator,
+		manga.Title,
+		lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(sourceIndicator),
+	)
+
+	return itemStyle.Render(line)
 }
 
 // renderFooter renders the footer with controls
@@ -472,6 +571,7 @@ func (m Model) renderFooter() string {
 		"/: search",
 		"s: sort",
 		"f: filter",
+		"i: toggle images",
 		"Enter: open",
 		"Esc: back",
 	}
