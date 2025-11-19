@@ -140,17 +140,29 @@ func (sm *SourceManager) GetSourcesByType(sourceType SourceType) []Source {
 // ListAllManga lists manga from all available sources
 func (sm *SourceManager) ListAllManga() ([]*Manga, error) {
 	var allManga []*Manga
+	var lastErr error
+	errorCount := 0
+
 	for _, source := range sm.sources {
 		if !source.IsAvailable() {
 			continue
 		}
 		manga, err := source.ListManga()
 		if err != nil {
-			// Log error but continue with other sources
+			// Track the error
+			lastErr = err
+			errorCount++
+			// Continue with other sources
 			continue
 		}
 		allManga = append(allManga, manga...)
 	}
+
+	// If we have no manga and encountered errors, return the last error
+	if len(allManga) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+
 	return allManga, nil
 }
 
