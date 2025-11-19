@@ -171,10 +171,12 @@ func ResizeImage(imgData []byte, maxWidth, maxHeight int) ([]byte, error) {
 
 // RenderImage renders an image using the Kitty graphics protocol
 func (ir *ImageRenderer) RenderImage(imgData []byte, opts ImageOptions) (string, error) {
-	// Resize image if needed
-	// Approximate pixel size: each cell is about 10x20 pixels (varies by terminal)
-	pixelWidth := opts.Width * 10
-	pixelHeight := opts.Height * 20
+	// For manga pages, we want to preserve as much detail as possible
+	// Modern terminals can have very small cells or high DPI displays
+	// Use generous pixel estimates: ~20-30 pixels per cell width, ~40-50 pixels per cell height
+	// This ensures images are rendered at high quality
+	pixelWidth := opts.Width * 30
+	pixelHeight := opts.Height * 50
 
 	resizedData, err := ResizeImage(imgData, pixelWidth, pixelHeight)
 	if err != nil {
