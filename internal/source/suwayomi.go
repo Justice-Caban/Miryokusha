@@ -118,12 +118,12 @@ func (s *SuwayomiSource) GetPage(chapter *Chapter, pageIndex int) (*Page, error)
 	// Fetch the image
 	resp, err := s.client.HTTPClient.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch page: %w", err)
+		return nil, fmt.Errorf("failed to fetch page from %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to fetch page: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to fetch page from %s: status %d", url, resp.StatusCode)
 	}
 
 	// Read image data
