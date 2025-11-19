@@ -140,7 +140,6 @@ type MangaNode struct {
 	Chapters       struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"chapters"`
-	LastReadAt     *int64   `json:"lastReadAt"`
 	LatestUploadedChapter *ChapterNode `json:"latestUploadedChapter"`
 	Source         *SourceNode `json:"source"`
 }
@@ -200,7 +199,6 @@ func (gc *GraphQLClient) GetMangaList(inLibrary bool, limit int, offset int) (*M
 					chapters {
 						totalCount
 					}
-					lastReadAt
 					latestUploadedChapter {
 						id
 						name
@@ -247,7 +245,6 @@ func (gc *GraphQLClient) GetMangaDetails(mangaID int) (*MangaNode, error) {
 				chapters {
 					totalCount
 				}
-				lastReadAt
 				source {
 					id
 					name
