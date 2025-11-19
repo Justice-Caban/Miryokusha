@@ -109,9 +109,11 @@ func (s *SuwayomiSource) GetChapter(chapterID string) (*Chapter, error) {
 }
 
 // GetPage retrieves a specific page from a chapter
-func (s *SuwayomiSource) GetPage(chapterID string, pageIndex int) (*Page, error) {
+func (s *SuwayomiSource) GetPage(chapter *Chapter, pageIndex int) (*Page, error) {
 	// Use REST API for page image retrieval
-	url := fmt.Sprintf("%s/api/v1/chapter/%s/page/%d", s.client.BaseURL, chapterID, pageIndex)
+	// Correct Suwayomi API endpoint includes manga ID
+	url := fmt.Sprintf("%s/api/v1/manga/%s/chapter/%s/page/%d",
+		s.client.BaseURL, chapter.MangaID, chapter.ID, pageIndex)
 
 	// Fetch the image
 	resp, err := s.client.HTTPClient.Get(url)
@@ -152,28 +154,29 @@ func (s *SuwayomiSource) GetPage(chapterID string, pageIndex int) (*Page, error)
 }
 
 // GetAllPages retrieves all pages from a chapter
-func (s *SuwayomiSource) GetAllPages(chapterID string) ([]*Page, error) {
-	// First, we need to know how many pages the chapter has
-	// We can get this from the chapter metadata
-	// For now, we'll try fetching pages until we get an error
+func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
+	// Use the PageCount from chapter metadata if available
+	maxPages := chapter.PageCount
+	if maxPages == 0 {
+		// Fallback to trying up to 500 pages
+		maxPages = 500
+	}
 
 	var pages []*Page
-	pageIndex := 0
 
-	// Try up to 500 pages (reasonable max)
-	for pageIndex < 500 {
-		page, err := s.GetPage(chapterID, pageIndex)
+	// Fetch all pages based on PageCount
+	for pageIndex := 0; pageIndex < maxPages; pageIndex++ {
+		page, err := s.GetPage(chapter, pageIndex)
 		if err != nil {
 			// If we can't get the page, assume we've reached the end
 			break
 		}
 
 		pages = append(pages, page)
-		pageIndex++
 	}
 
 	if len(pages) == 0 {
-		return nil, fmt.Errorf("no pages found for chapter %s", chapterID)
+		return nil, fmt.Errorf("no pages found for chapter %s (manga %s)", chapter.ID, chapter.MangaID)
 	}
 
 	return pages, nil
