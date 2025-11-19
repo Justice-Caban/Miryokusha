@@ -7,6 +7,7 @@ import (
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
 	"github.com/Justice-Caban/Miryokusha/internal/storage"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/kitty"
 	"github.com/Justice-Caban/Miryokusha/internal/tui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -46,6 +47,7 @@ type Model struct {
 	// Dependencies
 	sourceManager *source.SourceManager
 	storage       *storage.Storage
+	imageRenderer *kitty.ImageRenderer
 
 	// Loading state
 	loading bool
@@ -63,6 +65,7 @@ func NewModel(manga *source.Manga, chapter *source.Chapter, sm *source.SourceMan
 		showControls:  true,
 		sourceManager: sm,
 		storage:       st,
+		imageRenderer: kitty.NewImageRenderer(),
 		sessionStart:  time.Now(),
 		pagesRead:     0,
 		loading:       true,
@@ -380,83 +383,247 @@ func (m Model) renderSinglePage() string {
 
 	page := m.pages[m.currentPage]
 
-	// For now, show a placeholder since we don't have actual image rendering
-	// In a real implementation, this would use a library to display the image
-	placeholder := fmt.Sprintf(
-		"[Page %d]\n\n"+
-			"Image: %s\n\n"+
-			"(Image rendering not yet implemented)\n\n"+
-			"Use ← → or h l to navigate\n"+
-			"Press 'c' to hide controls",
-		m.currentPage+1,
-		page.URL,
+	// Calculate image dimensions based on terminal size
+	// Reserve space for header (5 lines) and footer (3 lines) if controls are shown
+	availableHeight := m.height
+	if m.showControls {
+		availableHeight -= 8
+	}
+
+	// Use most of the terminal width and height for the image
+	imageWidth := m.width - 4
+	imageHeight := availableHeight - 2
+
+	// Convert terminal cells to approximate cells for Kitty protocol
+	// Kitty measures in cells, so we use the terminal dimensions directly
+	cellWidth := imageWidth / 10  // Approximate character width
+	cellHeight := imageHeight / 2 // Approximate character height
+
+	if cellWidth < 1 {
+		cellWidth = 1
+	}
+	if cellHeight < 1 {
+		cellHeight = 1
+	}
+
+	// Configure image options
+	imageOpts := kitty.ImageOptions{
+		Width:               cellWidth,
+		Height:              cellHeight,
+		PreserveAspectRatio: true,
+		ImageID:             uint32(m.currentPage + 1000), // Offset to avoid conflicts
+	}
+
+	var imageStr string
+	var err error
+
+	// Check if we have image data already loaded
+	if len(page.ImageData) > 0 {
+		// Render from loaded data
+		imageStr, err = m.imageRenderer.RenderImage(page.ImageData, imageOpts)
+	} else if page.URL != "" {
+		// Fetch and render from URL
+		imageStr, err = m.imageRenderer.RenderImageFromURL(page.URL, imageOpts)
+	} else {
+		err = fmt.Errorf("no image data or URL available")
+	}
+
+	if err != nil {
+		// Fallback to text placeholder on error
+		placeholder := fmt.Sprintf(
+			"[Page %d]\n\n"+
+				"Failed to load image: %v\n\n"+
+				"URL: %s\n\n"+
+				"Use ← → or h l to navigate\n"+
+				"Press 'c' to hide controls",
+			m.currentPage+1,
+			err,
+			page.URL,
+		)
+
+		boxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(theme.ColorError).
+			Padding(2, 4).
+			Width(imageWidth).
+			Height(availableHeight).
+			Align(lipgloss.Center, lipgloss.Center)
+
+		return boxStyle.Render(placeholder)
+	}
+
+	// Center the image in the available space
+	return lipgloss.Place(
+		m.width,
+		availableHeight,
+		lipgloss.Center,
+		lipgloss.Center,
+		imageStr,
 	)
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.ColorMuted).
-		Padding(2, 4).
-		Width(m.width - 4).
-		Height(m.height - 15).
-		Align(lipgloss.Center, lipgloss.Center)
-
-	return boxStyle.Render(placeholder)
 }
 
 // renderDoublePage renders two pages side by side
 func (m Model) renderDoublePage() string {
 	// For double page mode, show current and next page
-	leftPage := m.currentPage
-	rightPage := m.currentPage + 1
+	leftPageIdx := m.currentPage
+	rightPageIdx := m.currentPage + 1
 
-	if leftPage >= len(m.pages) {
+	if leftPageIdx >= len(m.pages) {
 		return theme.CenteredText(m.width, m.height-10, "Invalid page")
 	}
 
-	leftPlaceholder := fmt.Sprintf("[Page %d]", leftPage+1)
-	rightPlaceholder := ""
-
-	if rightPage < len(m.pages) {
-		rightPlaceholder = fmt.Sprintf("[Page %d]", rightPage+1)
-	} else {
-		rightPlaceholder = "[End]"
+	// Calculate dimensions for side-by-side layout
+	availableHeight := m.height
+	if m.showControls {
+		availableHeight -= 8
 	}
 
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.ColorMuted).
-		Padding(2, 2).
-		Width((m.width / 2) - 4).
-		Height(m.height - 15).
-		Align(lipgloss.Center, lipgloss.Center)
+	pageWidth := (m.width / 2) - 4
+	cellWidth := pageWidth / 10
+	cellHeight := (availableHeight - 2) / 2
 
-	left := boxStyle.Render(leftPlaceholder)
-	right := boxStyle.Render(rightPlaceholder)
+	if cellWidth < 1 {
+		cellWidth = 1
+	}
+	if cellHeight < 1 {
+		cellHeight = 1
+	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	// Render left page
+	leftPage := m.pages[leftPageIdx]
+	leftOpts := kitty.ImageOptions{
+		Width:               cellWidth,
+		Height:              cellHeight,
+		PreserveAspectRatio: true,
+		ImageID:             uint32(leftPageIdx + 2000),
+	}
+
+	var leftImageStr string
+	var leftErr error
+
+	if len(leftPage.ImageData) > 0 {
+		leftImageStr, leftErr = m.imageRenderer.RenderImage(leftPage.ImageData, leftOpts)
+	} else if leftPage.URL != "" {
+		leftImageStr, leftErr = m.imageRenderer.RenderImageFromURL(leftPage.URL, leftOpts)
+	} else {
+		leftErr = fmt.Errorf("no image data")
+	}
+
+	if leftErr != nil {
+		leftImageStr = kitty.CreatePlaceholder(cellWidth, cellHeight, fmt.Sprintf("Page %d\nError", leftPageIdx+1))
+	}
+
+	// Render right page (if available)
+	var rightImageStr string
+	if rightPageIdx < len(m.pages) {
+		rightPage := m.pages[rightPageIdx]
+		rightOpts := kitty.ImageOptions{
+			Width:               cellWidth,
+			Height:              cellHeight,
+			PreserveAspectRatio: true,
+			ImageID:             uint32(rightPageIdx + 2000),
+		}
+
+		var rightErr error
+		if len(rightPage.ImageData) > 0 {
+			rightImageStr, rightErr = m.imageRenderer.RenderImage(rightPage.ImageData, rightOpts)
+		} else if rightPage.URL != "" {
+			rightImageStr, rightErr = m.imageRenderer.RenderImageFromURL(rightPage.URL, rightOpts)
+		} else {
+			rightErr = fmt.Errorf("no image data")
+		}
+
+		if rightErr != nil {
+			rightImageStr = kitty.CreatePlaceholder(cellWidth, cellHeight, fmt.Sprintf("Page %d\nError", rightPageIdx+1))
+		}
+	} else {
+		// End of chapter
+		rightImageStr = kitty.CreatePlaceholder(cellWidth, cellHeight, "End of\nChapter")
+	}
+
+	// Join pages horizontally
+	doublePage := lipgloss.JoinHorizontal(lipgloss.Top, leftImageStr, "  ", rightImageStr)
+
+	return lipgloss.Place(
+		m.width,
+		availableHeight,
+		lipgloss.Center,
+		lipgloss.Center,
+		doublePage,
+	)
 }
 
 // renderWebtoon renders in continuous scroll mode (showing multiple pages)
 func (m Model) renderWebtoon() string {
-	// In webtoon mode, show current page and hint at continuous scroll
-	placeholder := fmt.Sprintf(
-		"[Webtoon Mode]\n\n"+
-			"Page %d / %d\n\n"+
-			"(Continuous scroll rendering not yet implemented)\n\n"+
-			"Use ← → to navigate pages",
-		m.currentPage+1,
-		len(m.pages),
+	if m.currentPage >= len(m.pages) {
+		return theme.CenteredText(m.width, m.height-10, "Invalid page")
+	}
+
+	// In webtoon mode, show current page in full width
+	// Future enhancement: show multiple pages vertically
+	availableHeight := m.height
+	if m.showControls {
+		availableHeight -= 8
+	}
+
+	// Use full width for webtoon images (they're typically vertical)
+	imageWidth := m.width - 4
+	cellWidth := imageWidth / 8  // Slightly wider than single page mode
+	cellHeight := (availableHeight - 2) / 2
+
+	if cellWidth < 1 {
+		cellWidth = 1
+	}
+	if cellHeight < 1 {
+		cellHeight = 1
+	}
+
+	page := m.pages[m.currentPage]
+	imageOpts := kitty.ImageOptions{
+		Width:               cellWidth,
+		Height:              cellHeight,
+		PreserveAspectRatio: true,
+		ImageID:             uint32(m.currentPage + 3000), // Offset for webtoon mode
+	}
+
+	var imageStr string
+	var err error
+
+	if len(page.ImageData) > 0 {
+		imageStr, err = m.imageRenderer.RenderImage(page.ImageData, imageOpts)
+	} else if page.URL != "" {
+		imageStr, err = m.imageRenderer.RenderImageFromURL(page.URL, imageOpts)
+	} else {
+		err = fmt.Errorf("no image data or URL available")
+	}
+
+	if err != nil {
+		placeholder := fmt.Sprintf(
+			"[Webtoon Mode - Page %d]\n\n"+
+				"Failed to load image: %v\n\n"+
+				"Use ← → to navigate",
+			m.currentPage+1,
+			err,
+		)
+
+		boxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(theme.ColorError).
+			Padding(2, 4).
+			Width(imageWidth).
+			Height(availableHeight).
+			Align(lipgloss.Center, lipgloss.Center)
+
+		return boxStyle.Render(placeholder)
+	}
+
+	return lipgloss.Place(
+		m.width,
+		availableHeight,
+		lipgloss.Center,
+		lipgloss.Center,
+		imageStr,
 	)
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.ColorMuted).
-		Padding(2, 4).
-		Width(m.width - 4).
-		Height(m.height - 15).
-		Align(lipgloss.Center, lipgloss.Center)
-
-	return boxStyle.Render(placeholder)
 }
 
 // renderFooter renders the footer with controls
