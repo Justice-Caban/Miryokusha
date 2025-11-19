@@ -390,14 +390,11 @@ func (m Model) renderSinglePage() string {
 		availableHeight -= 8
 	}
 
-	// Use most of the terminal width and height for the image
-	imageWidth := m.width - 4
-	imageHeight := availableHeight - 2
-
-	// Convert terminal cells to approximate cells for Kitty protocol
-	// Kitty measures in cells, so we use the terminal dimensions directly
-	cellWidth := imageWidth / 10  // Approximate character width
-	cellHeight := imageHeight / 2 // Approximate character height
+	// Use full available terminal space for the image
+	// Kitty protocol accepts dimensions in terminal cells (columns/rows)
+	// So we pass the terminal dimensions directly
+	cellWidth := m.width - 4   // Leave small margin
+	cellHeight := availableHeight - 2
 
 	if cellWidth < 1 {
 		cellWidth = 1
@@ -445,7 +442,7 @@ func (m Model) renderSinglePage() string {
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(theme.ColorError).
 			Padding(2, 4).
-			Width(imageWidth).
+			Width(cellWidth).
 			Height(availableHeight).
 			Align(lipgloss.Center, lipgloss.Center)
 
@@ -478,9 +475,10 @@ func (m Model) renderDoublePage() string {
 		availableHeight -= 8
 	}
 
-	pageWidth := (m.width / 2) - 4
-	cellWidth := pageWidth / 10
-	cellHeight := (availableHeight - 2) / 2
+	// Each page gets half the width (with margin between)
+	// Full height is available for each page
+	cellWidth := (m.width / 2) - 4
+	cellHeight := availableHeight - 2
 
 	if cellWidth < 1 {
 		cellWidth = 1
@@ -560,16 +558,16 @@ func (m Model) renderWebtoon() string {
 	}
 
 	// In webtoon mode, show current page in full width
-	// Future enhancement: show multiple pages vertically
+	// Webtoon images are typically tall and narrow (vertical scrolling format)
 	availableHeight := m.height
 	if m.showControls {
 		availableHeight -= 8
 	}
 
-	// Use full width for webtoon images (they're typically vertical)
-	imageWidth := m.width - 4
-	cellWidth := imageWidth / 8  // Slightly wider than single page mode
-	cellHeight := (availableHeight - 2) / 2
+	// Use full terminal space for webtoon images
+	// Webtoons are read vertically, so prioritize height
+	cellWidth := m.width - 4
+	cellHeight := availableHeight - 2
 
 	if cellWidth < 1 {
 		cellWidth = 1
@@ -610,7 +608,7 @@ func (m Model) renderWebtoon() string {
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(theme.ColorError).
 			Padding(2, 4).
-			Width(imageWidth).
+			Width(cellWidth).
 			Height(availableHeight).
 			Align(lipgloss.Center, lipgloss.Center)
 
