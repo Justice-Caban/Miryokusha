@@ -13,6 +13,7 @@ bin/
 
 # Built binary in root directory
 miryokusha
+/test-library
 
 # Test binary, built with `go test -c`
 *.test
