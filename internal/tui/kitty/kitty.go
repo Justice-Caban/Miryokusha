@@ -216,8 +216,11 @@ func (ir *ImageRenderer) renderImageDirect(imgData []byte, opts ImageOptions) (s
 		}
 
 		if i == 0 {
-			// First chunk
+			// First chunk only
 			params = append(params, "a=T") // Action: transmit and display
+
+			// Use columns and rows for sizing - this tells Kitty how many cells to fill
+			// The image will be scaled to fit within these dimensions
 			if opts.Width > 0 {
 				params = append(params, fmt.Sprintf("c=%d", opts.Width))
 			}
@@ -239,7 +242,34 @@ func (ir *ImageRenderer) renderImageDirect(imgData []byte, opts ImageOptions) (s
 		sb.WriteString(ST)
 	}
 
+	// After transmitting the image, we need to output placeholder characters
+	// for the image to occupy the specified cells
+	sb.WriteString(createImagePlaceholder(opts.Width, opts.Height))
+
 	return sb.String(), nil
+}
+
+// createImagePlaceholder creates placeholder characters for an image to occupy
+func createImagePlaceholder(cols, rows int) string {
+	if cols <= 0 || rows <= 0 {
+		return ""
+	}
+
+	// Create empty lines to reserve space for the image
+	// The image will be displayed in these cells
+	var sb strings.Builder
+	for r := 0; r < rows; r++ {
+		// Output spaces to fill the row
+		for c := 0; c < cols; c++ {
+			sb.WriteString(" ")
+		}
+		// Newline after each row (except the last one)
+		if r < rows-1 {
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
 
 // RenderImageFromURL fetches an image from a URL and renders it
