@@ -155,6 +155,17 @@ func (s *SuwayomiSource) GetPage(chapter *Chapter, pageIndex int) (*Page, error)
 
 // GetAllPages retrieves all pages from a chapter
 func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
+	// Validate chapter data
+	if chapter == nil {
+		return nil, fmt.Errorf("chapter is nil")
+	}
+	if chapter.ID == "" {
+		return nil, fmt.Errorf("chapter ID is empty")
+	}
+	if chapter.MangaID == "" {
+		return nil, fmt.Errorf("chapter MangaID is empty")
+	}
+
 	// Use the PageCount from chapter metadata if available
 	maxPages := chapter.PageCount
 	if maxPages == 0 {
@@ -182,10 +193,11 @@ func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
 
 	if len(pages) == 0 {
 		if firstError != nil {
-			return nil, fmt.Errorf("no pages found for chapter %s (manga %s): first page error: %w",
-				chapter.ID, chapter.MangaID, firstError)
+			return nil, fmt.Errorf("no pages found for chapter %s (manga %s, pageCount: %d): first page error: %w",
+				chapter.ID, chapter.MangaID, chapter.PageCount, firstError)
 		}
-		return nil, fmt.Errorf("no pages found for chapter %s (manga %s)", chapter.ID, chapter.MangaID)
+		return nil, fmt.Errorf("no pages found for chapter %s (manga %s, pageCount: %d, tried %d pages)",
+			chapter.ID, chapter.MangaID, chapter.PageCount, maxPages)
 	}
 
 	return pages, nil
@@ -270,6 +282,8 @@ func (s *SuwayomiSource) convertChapterNode(node *suwayomi.ChapterNode, mangaID 
 		IsBookmarked:   node.IsBookmarked,
 		IsDownloaded:   node.IsDownloaded,
 		PageCount:      node.PageCount,
+		SourceType:     SourceTypeSuwayomi,
+		SourceID:       s.id,
 	}
 }
 
