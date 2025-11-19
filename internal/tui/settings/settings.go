@@ -250,7 +250,24 @@ func (m Model) View() string {
 	// Footer
 	b.WriteString(m.renderFooter())
 
-	return b.String()
+	// Apply consistent horizontal padding/centering
+	content := b.String()
+	maxWidth := 100
+	if m.width < maxWidth {
+		maxWidth = m.width - 4
+	}
+
+	contentStyle := lipgloss.NewStyle().
+		Width(maxWidth).
+		Padding(0, 2)
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Top,
+		contentStyle.Render(content),
+	)
 }
 
 // renderServerConfig renders the server configuration section
