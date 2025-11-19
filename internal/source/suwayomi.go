@@ -167,9 +167,10 @@ func (s *SuwayomiSource) GetAllPages(chapter *Chapter) ([]*Page, error) {
 	}
 
 	// Use the PageCount from chapter metadata if available
+	// Note: Suwayomi returns -1 for unknown page count
 	maxPages := chapter.PageCount
-	if maxPages == 0 {
-		// Fallback to trying up to 500 pages
+	if maxPages <= 0 {
+		// Fallback to trying up to 500 pages if count is unknown
 		maxPages = 500
 	}
 
