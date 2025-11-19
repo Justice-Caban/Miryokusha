@@ -491,3 +491,30 @@ func (gc *GraphQLClient) UpdateExtension(pkgName string) error {
 
 	return gc.Mutate(mutation, variables, nil)
 }
+
+// FetchChapterPages triggers Suwayomi to fetch chapter pages from the manga source.
+// This must be called before accessing individual page images via the REST API.
+// Suwayomi lazily loads pages only when requested, so this mutation "primes" the chapter.
+func (gc *GraphQLClient) FetchChapterPages(chapterID int) error {
+	mutation := `
+		mutation FetchChapterPages($input: FetchChapterPagesInput!) {
+			fetchChapterPages(input: $input) {
+				pages
+			}
+		}
+	`
+
+	variables := map[string]interface{}{
+		"input": map[string]interface{}{
+			"chapterId": chapterID,
+		},
+	}
+
+	var result struct {
+		FetchChapterPages struct {
+			Pages []string `json:"pages"`
+		} `json:"fetchChapterPages"`
+	}
+
+	return gc.Mutate(mutation, variables, &result)
+}
