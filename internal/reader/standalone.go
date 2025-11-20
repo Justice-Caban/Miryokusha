@@ -173,27 +173,69 @@ func (r *StandaloneReader) loadChapter() error {
 
 // eventLoop handles keyboard input
 func (r *StandaloneReader) eventLoop() error {
+	// DEBUG: Open log file
+	logFile, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if logFile != nil {
+		defer logFile.Close()
+	}
+
 	buf := make([]byte, 3)
+	iterationCount := 0
 
 	for {
+		iterationCount++
+		if logFile != nil && iterationCount <= 5 {
+			fmt.Fprintf(logFile, "Event loop iteration %d\n", iterationCount)
+		}
+
 		// Render current page
+		if logFile != nil && iterationCount <= 5 {
+			fmt.Fprintf(logFile, "Calling render()...\n")
+		}
+
 		if err := r.render(); err != nil {
+			if logFile != nil {
+				fmt.Fprintf(logFile, "ERROR: render() failed: %v\n", err)
+			}
 			return err
+		}
+
+		if logFile != nil && iterationCount <= 5 {
+			fmt.Fprintf(logFile, "render() completed successfully\n")
+			fmt.Fprintf(logFile, "About to read from tty...\n")
 		}
 
 		// Read key from TTY
 		n, err := r.tty.Read(buf)
+
+		if logFile != nil && iterationCount <= 5 {
+			fmt.Fprintf(logFile, "tty.Read returned: n=%d, err=%v, buf[0]=%d\n", n, err, buf[0])
+		}
+
 		if err != nil {
+			if logFile != nil {
+				fmt.Fprintf(logFile, "ERROR: tty.Read failed: %v\n", err)
+			}
 			return err
 		}
 
 		if n == 0 {
+			if logFile != nil && iterationCount <= 5 {
+				fmt.Fprintf(logFile, "Read 0 bytes, continuing...\n")
+			}
 			continue
+		}
+
+		if logFile != nil {
+			fmt.Fprintf(logFile, "Processing key: buf[0]=%d (%c)\n", buf[0], buf[0])
 		}
 
 		// Handle key
 		switch {
 		case buf[0] == 'q' || buf[0] == 27: // q or Esc
+			if logFile != nil {
+				fmt.Fprintf(logFile, "User pressed q or Esc, exiting\n")
+			}
 			return nil
 
 		case buf[0] == ' ', buf[0] == 'l', buf[0] == '\r': // Space, l, Enter - next page
