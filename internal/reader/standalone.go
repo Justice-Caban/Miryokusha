@@ -3,6 +3,7 @@ package reader
 import (
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
@@ -139,6 +140,47 @@ func (r *StandaloneReader) Run() error {
 		return fmt.Errorf("failed to set raw mode: %w", err)
 	}
 	defer term.Restore(int(tty.Fd()), oldState)
+
+	// IMPORTANT: Flush the TTY input buffer
+	// The Bubble Tea TUI may have left escape sequences in the buffer
+	// We need to drain them before we start reading keys
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Flushing TTY input buffer...\n")
+	}
+
+	// Set non-blocking mode temporarily
+	if err := syscall.SetNonblock(int(tty.Fd()), true); err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "WARNING: Failed to set non-blocking mode: %v\n", err)
+		}
+	} else {
+		// Drain all pending input
+		drainBuf := make([]byte, 1024)
+		totalDrained := 0
+		for {
+			n, _ := tty.Read(drainBuf)
+			if n == 0 {
+				break
+			}
+			totalDrained += n
+			if logFile != nil && totalDrained < 100 {
+				// Log first few bytes for debugging
+				for i := 0; i < n && totalDrained <= 100; i++ {
+					fmt.Fprintf(logFile, "Drained byte: %d\n", drainBuf[i])
+				}
+			}
+		}
+		if logFile != nil {
+			fmt.Fprintf(logFile, "Drained %d bytes from TTY buffer\n", totalDrained)
+		}
+
+		// Set back to blocking mode
+		if err := syscall.SetNonblock(int(tty.Fd()), false); err != nil {
+			if logFile != nil {
+				fmt.Fprintf(logFile, "WARNING: Failed to restore blocking mode: %v\n", err)
+			}
+		}
+	}
 
 	// Hide cursor
 	fmt.Fprint(tty, "\x1b[?25l")
