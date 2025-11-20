@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -53,11 +52,10 @@ func runReaderMode() {
 		fmt.Fprintf(os.Stderr, "WARNING: Could not create log file: %v\n", logErr)
 	}
 
-	// Parse reader flags
+	// Parse reader flags - now accepting IDs instead of full JSON data
 	readerFlags := flag.NewFlagSet("reader", flag.ExitOnError)
-	mangaJSON := readerFlags.String("manga", "", "Manga data (JSON)")
-	chapterJSON := readerFlags.String("chapter", "", "Chapter data (JSON)")
-	chaptersJSON := readerFlags.String("chapters", "", "All chapters data (JSON)")
+	mangaID := readerFlags.String("manga-id", "", "Manga ID")
+	chapterID := readerFlags.String("chapter-id", "", "Chapter ID")
 
 	if err := readerFlags.Parse(os.Args[2:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing reader flags: %v\n", err)
@@ -68,54 +66,17 @@ func runReaderMode() {
 	}
 
 	if logFile != nil {
-		fmt.Fprintf(logFile, "Manga JSON length: %d\n", len(*mangaJSON))
-		fmt.Fprintf(logFile, "Chapter JSON length: %d\n", len(*chapterJSON))
-		fmt.Fprintf(logFile, "Chapters JSON length: %d\n", len(*chaptersJSON))
+		fmt.Fprintf(logFile, "Manga ID: %s\n", *mangaID)
+		fmt.Fprintf(logFile, "Chapter ID: %s\n", *chapterID)
 	}
 
-	// Decode manga
-	var manga source.Manga
-	if err := json.Unmarshal([]byte(*mangaJSON), &manga); err != nil {
-		errMsg := fmt.Sprintf("Error decoding manga: %v", err)
+	if *mangaID == "" || *chapterID == "" {
+		errMsg := "Error: manga-id and chapter-id are required"
 		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
 		if logFile != nil {
 			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
 		}
 		os.Exit(1)
-	}
-
-	if logFile != nil {
-		fmt.Fprintf(logFile, "Successfully decoded manga: %s\n", manga.Title)
-	}
-
-	// Decode chapter
-	var chapter source.Chapter
-	if err := json.Unmarshal([]byte(*chapterJSON), &chapter); err != nil {
-		errMsg := fmt.Sprintf("Error decoding chapter: %v", err)
-		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
-		if logFile != nil {
-			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
-		}
-		os.Exit(1)
-	}
-
-	if logFile != nil {
-		fmt.Fprintf(logFile, "Successfully decoded chapter: %.1f\n", chapter.ChapterNumber)
-	}
-
-	// Decode chapters
-	var chapters []*source.Chapter
-	if err := json.Unmarshal([]byte(*chaptersJSON), &chapters); err != nil {
-		errMsg := fmt.Sprintf("Error decoding chapters: %v", err)
-		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
-		if logFile != nil {
-			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
-		}
-		os.Exit(1)
-	}
-
-	if logFile != nil {
-		fmt.Fprintf(logFile, "Successfully decoded %d chapters\n", len(chapters))
 	}
 
 	// Load config
@@ -159,12 +120,81 @@ func runReaderMode() {
 		}
 	}
 
+	// Fetch manga data from source
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Fetching manga data for ID: %s\n", *mangaID)
+	}
+
+	var manga *source.Manga
+	var fetchErr error
+	for _, src := range sourceManager.GetSources() {
+		manga, fetchErr = src.GetManga(*mangaID)
+		if fetchErr == nil {
+			if logFile != nil {
+				fmt.Fprintf(logFile, "Successfully fetched manga: %s\n", manga.Title)
+			}
+			break
+		}
+	}
+	if manga == nil {
+		errMsg := fmt.Sprintf("Error: could not fetch manga with ID %s: %v", *mangaID, fetchErr)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
+		os.Exit(1)
+	}
+
+	// Fetch all chapters for navigation
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Fetching all chapters for manga: %s\n", manga.Title)
+	}
+
+	var chapters []*source.Chapter
+	for _, src := range sourceManager.GetSources() {
+		chapters, fetchErr = src.ListChapters(*mangaID)
+		if fetchErr == nil {
+			if logFile != nil {
+				fmt.Fprintf(logFile, "Successfully fetched %d chapters\n", len(chapters))
+			}
+			break
+		}
+	}
+	if chapters == nil || len(chapters) == 0 {
+		errMsg := fmt.Sprintf("Error: could not fetch chapters for manga %s: %v", *mangaID, fetchErr)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
+		os.Exit(1)
+	}
+
+	// Find the requested chapter
+	var chapter *source.Chapter
+	for _, ch := range chapters {
+		if ch.ID == *chapterID {
+			chapter = ch
+			if logFile != nil {
+				fmt.Fprintf(logFile, "Found requested chapter: %.1f - %s\n", ch.ChapterNumber, ch.Title)
+			}
+			break
+		}
+	}
+	if chapter == nil {
+		errMsg := fmt.Sprintf("Error: could not find chapter with ID %s", *chapterID)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
+		os.Exit(1)
+	}
+
 	if logFile != nil {
 		fmt.Fprintf(logFile, "Creating standalone reader...\n")
 	}
 
 	// Create standalone reader
-	r := reader.NewStandaloneReader(&manga, &chapter, chapters, sourceManager, st)
+	r := reader.NewStandaloneReader(manga, chapter, chapters, sourceManager, st)
 
 	if logFile != nil {
 		fmt.Fprintf(logFile, "Starting reader...\n")

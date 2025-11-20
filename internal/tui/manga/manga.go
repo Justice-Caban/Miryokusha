@@ -1,7 +1,6 @@
 package manga
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -370,51 +369,16 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 	if logFile != nil {
 		fmt.Fprintf(logFile, "\n=== openChapter called ===\n")
 		fmt.Fprintf(logFile, "Chapter: %.1f - %s\n", chapter.ChapterNumber, chapter.Title)
-		fmt.Fprintf(logFile, "Manga: %s\n", m.manga.Title)
+		fmt.Fprintf(logFile, "Manga: %s (ID: %s)\n", m.manga.Title, m.manga.ID)
+		fmt.Fprintf(logFile, "Chapter ID: %s\n", chapter.ID)
 		logFile.Close()
 	}
 
 	// Launch standalone reader using tea.Exec to bypass alt-screen limitations
 	// This allows Kitty graphics protocol to work properly
 
-	// Serialize data to JSON for passing to reader mode
-	mangaJSON, err := json.Marshal(m.manga)
-	if err != nil {
-		if logFile != nil {
-			logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			if logFile != nil {
-				fmt.Fprintf(logFile, "ERROR: Failed to marshal manga: %v\n", err)
-				logFile.Close()
-			}
-		}
-		return func() tea.Msg {
-			return fmt.Errorf("failed to marshal manga: %w", err)
-		}
-	}
-
-	chapterJSON, err := json.Marshal(chapter)
-	if err != nil {
-		logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if logFile != nil {
-			fmt.Fprintf(logFile, "ERROR: Failed to marshal chapter: %v\n", err)
-			logFile.Close()
-		}
-		return func() tea.Msg {
-			return fmt.Errorf("failed to marshal chapter: %w", err)
-		}
-	}
-
-	chaptersJSON, err := json.Marshal(m.chapters)
-	if err != nil {
-		logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if logFile != nil {
-			fmt.Fprintf(logFile, "ERROR: Failed to marshal chapters: %v\n", err)
-			logFile.Close()
-		}
-		return func() tea.Msg {
-			return fmt.Errorf("failed to marshal chapters: %w", err)
-		}
-	}
+	// NOTE: We only pass IDs, not full JSON data, to avoid "argument list too long" error
+	// The reader will re-fetch the data from the source using these IDs
 
 	// Get the absolute path to the current binary
 	execPath, err := os.Executable()
@@ -431,20 +395,18 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 	// DEBUG: Log that we're about to launch reader
 	logFile2, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if logFile2 != nil {
-		fmt.Fprintf(logFile2, "JSON marshaling successful, launching tea.ExecProcess\n")
+		fmt.Fprintf(logFile2, "Launching tea.ExecProcess with IDs only\n")
 		fmt.Fprintf(logFile2, "Executable path: %s\n", execPath)
-		fmt.Fprintf(logFile2, "os.Args[0]: %s\n", os.Args[0])
-		fmt.Fprintf(logFile2, "Command: %s reader [with JSON args]\n", execPath)
+		fmt.Fprintf(logFile2, "Manga ID: %s, Chapter ID: %s\n", m.manga.ID, chapter.ID)
 		logFile2.Close()
 	}
 
-	// Create the command with absolute path
+	// Create the command with just IDs (not full JSON data)
 	cmd := exec.Command(
 		execPath,
 		"reader",
-		"--manga", string(mangaJSON),
-		"--chapter", string(chapterJSON),
-		"--chapters", string(chaptersJSON),
+		"--manga-id", m.manga.ID,
+		"--chapter-id", chapter.ID,
 	)
 
 	// Make sure stdin/stdout/stderr are properly connected
