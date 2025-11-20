@@ -177,7 +177,24 @@ func (ir *ImageRenderer) RenderImage(imgData []byte, opts ImageOptions) (string,
 		return "", fmt.Errorf("failed to decode image: %w", err)
 	}
 
-	// Use the battle-tested rasterm library for Kitty protocol
+	// CRITICAL: Query actual terminal cell size in pixels
+	// This is what ratatui-image does and what we were missing!
+	cellSize, err := GetCellSize()
+	if err != nil {
+		// Fallback to default if detection fails
+		cellSize = CellSize{Width: 10, Height: 20}
+	}
+
+	// Calculate target pixel dimensions based on actual cell size
+	// This ensures proper image scaling
+	targetWidthPx := opts.Width * cellSize.Width
+	targetHeightPx := opts.Height * cellSize.Height
+
+	// Pre-resize image to exact pixel dimensions for optimal quality
+	// This is the key insight from ratatui-image implementation
+	resizedImg := imaging.Fit(img, targetWidthPx, targetHeightPx, imaging.Lanczos)
+
+	// Now use rasterm to encode with Kitty protocol
 	var buf bytes.Buffer
 	kittyOpts := rasterm.KittyImgOpts{
 		DstCols: uint32(opts.Width),  // Display width in terminal columns
@@ -185,7 +202,7 @@ func (ir *ImageRenderer) RenderImage(imgData []byte, opts ImageOptions) (string,
 		ImageId: opts.ImageID,         // Unique image ID
 	}
 
-	if err := rasterm.KittyWriteImage(&buf, img, kittyOpts); err != nil {
+	if err := rasterm.KittyWriteImage(&buf, resizedImg, kittyOpts); err != nil {
 		return "", fmt.Errorf("failed to encode image with Kitty protocol: %w", err)
 	}
 
