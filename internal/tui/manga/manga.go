@@ -323,7 +323,10 @@ type chaptersLoadedMsg struct {
 	err      error
 }
 
-// OpenChapterMsg is sent when a chapter should be opened in the reader
+// OpenChapterMsg is DEPRECATED - no longer used since we switched to standalone reader
+// The manga view now uses tea.ExecProcess to launch the standalone reader directly
+// This type is kept for backward compatibility with history view, which still uses the old TUI reader
+// TODO: Remove this once history view is updated to use standalone reader
 type OpenChapterMsg struct {
 	Manga   *source.Manga
 	Chapter *source.Chapter

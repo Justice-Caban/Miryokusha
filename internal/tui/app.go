@@ -238,7 +238,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.mangaModel.Init()
 
 	case manga.OpenChapterMsg:
-		// Open reader from manga details view
+		// DEPRECATED: This code path is no longer used by manga view
+		// Manga view now uses standalone reader via tea.ExecProcess
+		// This is kept for backward compatibility with history view
+		// TODO: Remove once history view is updated to use standalone reader
 		readerModel := reader.NewModel(msg.Manga, msg.Chapter, m.sourceManager, m.storage)
 		m.readerModel = &readerModel
 		m.currentView = ViewReader

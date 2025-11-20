@@ -1,3 +1,11 @@
+// Package reader provides a DEPRECATED Bubble Tea-based manga reader
+//
+// This reader is no longer used by the manga view, which now uses the
+// standalone reader (internal/reader) via tea.ExecProcess to bypass
+// Bubble Tea's alt-screen limitations with Kitty graphics protocol.
+//
+// This package is kept for backward compatibility with the history view.
+// TODO: Update history view to use standalone reader and remove this package.
 package reader
 
 import (
