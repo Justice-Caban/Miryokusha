@@ -17,6 +17,9 @@ test-library
 schema-tool
 test-image
 test-reader-dims
+test-cellsize-debug
+test-direct-output
+test-no-altscreen
 
 # Test binary, built with `go test -c`
 *.test
