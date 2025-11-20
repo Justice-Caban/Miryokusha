@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/BourgeoisBear/rasterm"
+	"github.com/Justice-Caban/Miryokusha/internal/tui/kitty"
 )
 
 func main() {
@@ -24,7 +25,10 @@ func main() {
 	fmt.Println("Testing Kitty Graphics Protocol with Ghostty")
 	fmt.Println("============================================")
 	fmt.Printf("Terminal: %s\n", os.Getenv("TERM"))
-	fmt.Printf("TERM_PROGRAM: %s\n\n", os.Getenv("TERM_PROGRAM"))
+	fmt.Printf("TERM_PROGRAM: %s\n", os.Getenv("TERM_PROGRAM"))
+
+	// Show cell size detection
+	kitty.PrintCellSizeDiagnostic()
 
 	// Test 1: Small size (10x10 cells)
 	fmt.Println("Test 1: 10x10 cells")
