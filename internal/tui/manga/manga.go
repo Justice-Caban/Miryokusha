@@ -354,6 +354,15 @@ func (m Model) loadChapters() tea.Msg {
 }
 
 func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
+	// DEBUG: Log that we're attempting to open a chapter
+	logFile, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if logFile != nil {
+		fmt.Fprintf(logFile, "\n=== openChapter called ===\n")
+		fmt.Fprintf(logFile, "Chapter: %.1f - %s\n", chapter.ChapterNumber, chapter.Title)
+		fmt.Fprintf(logFile, "Manga: %s\n", m.manga.Title)
+		logFile.Close()
+	}
+
 	// Launch standalone reader using tea.Exec to bypass alt-screen limitations
 	// This allows Kitty graphics protocol to work properly
 
@@ -379,6 +388,14 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 		}
 	}
 
+	// DEBUG: Log that we're about to launch reader
+	logFile2, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if logFile2 != nil {
+		fmt.Fprintf(logFile2, "JSON marshaling successful, launching tea.ExecProcess\n")
+		fmt.Fprintf(logFile2, "Command: %s reader --manga <json> --chapter <json> --chapters <json>\n", os.Args[0])
+		logFile2.Close()
+	}
+
 	// Launch reader mode using tea.ExecProcess
 	return tea.ExecProcess(exec.Command(
 		os.Args[0], // Call ourselves
@@ -387,6 +404,17 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 		"--chapter", string(chapterJSON),
 		"--chapters", string(chaptersJSON),
 	), func(err error) tea.Msg {
+		// DEBUG: Log when reader exits
+		logFile3, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if logFile3 != nil {
+			if err != nil {
+				fmt.Fprintf(logFile3, "Reader exited with error: %v\n", err)
+			} else {
+				fmt.Fprintf(logFile3, "Reader exited successfully\n")
+			}
+			logFile3.Close()
+		}
+
 		// When reader exits, return to this view
 		if err != nil {
 			return fmt.Errorf("reader error: %w", err)
