@@ -74,35 +74,69 @@ func runReaderMode() {
 	// Decode manga
 	var manga source.Manga
 	if err := json.Unmarshal([]byte(*mangaJSON), &manga); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding manga: %v\n", err)
+		errMsg := fmt.Sprintf("Error decoding manga: %v", err)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
 		os.Exit(1)
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Successfully decoded manga: %s\n", manga.Title)
 	}
 
 	// Decode chapter
 	var chapter source.Chapter
 	if err := json.Unmarshal([]byte(*chapterJSON), &chapter); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding chapter: %v\n", err)
+		errMsg := fmt.Sprintf("Error decoding chapter: %v", err)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
 		os.Exit(1)
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Successfully decoded chapter: %.1f\n", chapter.ChapterNumber)
 	}
 
 	// Decode chapters
 	var chapters []*source.Chapter
 	if err := json.Unmarshal([]byte(*chaptersJSON), &chapters); err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding chapters: %v\n", err)
+		errMsg := fmt.Sprintf("Error decoding chapters: %v", err)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
 		os.Exit(1)
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Successfully decoded %d chapters\n", len(chapters))
 	}
 
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "Config load failed, using defaults: %v\n", err)
+		}
 		cfg = config.DefaultConfig()
+	} else if logFile != nil {
+		fmt.Fprintf(logFile, "Config loaded successfully\n")
 	}
 
 	// Initialize storage
 	st, err := storage.NewStorage(cfg.Paths.Database)
 	if err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "Storage init failed, continuing without: %v\n", err)
+		}
 		// Continue without storage
 		st = nil
+	} else if logFile != nil {
+		fmt.Fprintf(logFile, "Storage initialized\n")
 	}
 
 	// Initialize source manager
@@ -117,16 +151,35 @@ func runReaderMode() {
 				serverCfg.URL,
 			)
 			sourceManager.AddSource(suwayomiSource)
+			if logFile != nil {
+				fmt.Fprintf(logFile, "Added Suwayomi source: %s (%s)\n", serverCfg.Name, serverCfg.URL)
+			}
 		}
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Creating standalone reader...\n")
 	}
 
 	// Create standalone reader
 	r := reader.NewStandaloneReader(&manga, &chapter, chapters, sourceManager, st)
 
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Starting reader...\n")
+	}
+
 	// Run reader
 	if err := r.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error running reader: %v\n", err)
+		errMsg := fmt.Sprintf("Error running reader: %v", err)
+		fmt.Fprintf(os.Stderr, "%s\n", errMsg)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: %s\n", errMsg)
+		}
 		os.Exit(1)
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Reader exited normally\n")
 	}
 
 	// Save progress before exiting
