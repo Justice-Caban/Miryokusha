@@ -26,6 +26,7 @@ type StandaloneReader struct {
 	storage       *storage.Storage
 	imageRenderer *kitty.ImageRenderer
 	cellSize      kitty.CellSize
+	tty           *os.File
 
 	// Reading session tracking
 	sessionStart time.Time
@@ -70,29 +71,84 @@ func NewStandaloneReader(
 
 // Run starts the standalone reader
 func (r *StandaloneReader) Run() error {
-	// Get terminal size
-	width, height, err := term.GetSize(int(os.Stdout.Fd()))
+	// DEBUG: Write to a log file to see if we even get here
+	logFile, err := os.OpenFile("/tmp/miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err == nil {
+		defer logFile.Close()
+		fmt.Fprintf(logFile, "\n=== Reader started at %v ===\n", time.Now())
+		fmt.Fprintf(logFile, "Manga: %s\n", r.manga.Title)
+		fmt.Fprintf(logFile, "Chapter: %.1f - %s\n", r.chapter.ChapterNumber, r.chapter.Title)
+	}
+
+	// Open /dev/tty explicitly to ensure we have the controlling terminal
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: Failed to open /dev/tty: %v\n", err)
+		}
+		return fmt.Errorf("failed to open /dev/tty: %w", err)
+	}
+	defer tty.Close()
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Successfully opened /dev/tty\n")
+	}
+
+	// Get terminal size from TTY
+	width, height, err := term.GetSize(int(tty.Fd()))
+	if err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: Failed to get terminal size: %v\n", err)
+		}
 		return fmt.Errorf("failed to get terminal size: %w", err)
 	}
 	r.width = width
 	r.height = height
 
-	// Set terminal to raw mode for key handling
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		return fmt.Errorf("failed to set raw mode: %w", err)
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Terminal size: %dx%d\n", width, height)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-	// Hide cursor
-	fmt.Print("\x1b[?25l")
-	defer fmt.Print("\x1b[?25h")
 
 	// Load initial chapter
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Loading chapter pages...\n")
+	}
+
 	if err := r.loadChapter(); err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: Failed to load chapter: %v\n", err)
+		}
+		// Show error to user before exiting
+		fmt.Fprintf(tty, "\n\nError loading chapter: %v\n", err)
+		fmt.Fprintf(tty, "Press Enter to exit...")
+		tty.Read(make([]byte, 1))
 		return err
 	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Loaded %d pages\n", len(r.pages))
+	}
+
+	// Set terminal to raw mode for key handling
+	oldState, err := term.MakeRaw(int(tty.Fd()))
+	if err != nil {
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: Failed to set raw mode: %v\n", err)
+		}
+		return fmt.Errorf("failed to set raw mode: %w", err)
+	}
+	defer term.Restore(int(tty.Fd()), oldState)
+
+	// Hide cursor
+	fmt.Fprint(tty, "\x1b[?25l")
+	defer fmt.Fprint(tty, "\x1b[?25h")
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Entering event loop\n")
+	}
+
+	// Store tty for use in event loop
+	r.tty = tty
 
 	// Main loop
 	return r.eventLoop()
@@ -124,8 +180,8 @@ func (r *StandaloneReader) eventLoop() error {
 			return err
 		}
 
-		// Read key
-		n, err := os.Stdin.Read(buf)
+		// Read key from TTY
+		n, err := r.tty.Read(buf)
 		if err != nil {
 			return err
 		}
@@ -193,11 +249,11 @@ func (r *StandaloneReader) eventLoop() error {
 // render displays the current page
 func (r *StandaloneReader) render() error {
 	// Clear screen
-	fmt.Print("\x1b[2J\x1b[H")
+	fmt.Fprint(r.tty, "\x1b[2J\x1b[H")
 
 	if len(r.pages) == 0 {
-		fmt.Println("No pages available")
-		fmt.Println("Press 'q' to exit")
+		fmt.Fprintln(r.tty, "No pages available")
+		fmt.Fprintln(r.tty, "Press 'q' to exit")
 		return nil
 	}
 
@@ -206,11 +262,11 @@ func (r *StandaloneReader) render() error {
 	cellHeight := r.height - 6 // Leave room for header/footer
 
 	// Render header
-	fmt.Printf("%s - Chapter %.1f", r.manga.Title, r.chapter.ChapterNumber)
+	fmt.Fprintf(r.tty, "%s - Chapter %.1f", r.manga.Title, r.chapter.ChapterNumber)
 	if r.chapter.Title != "" {
-		fmt.Printf(": %s", r.chapter.Title)
+		fmt.Fprintf(r.tty, ": %s", r.chapter.Title)
 	}
-	fmt.Printf(" [%d/%d]\n\n", r.currentPage+1, len(r.pages))
+	fmt.Fprintf(r.tty, " [%d/%d]\n\n", r.currentPage+1, len(r.pages))
 
 	// Render image
 	page := r.pages[r.currentPage]
@@ -233,13 +289,13 @@ func (r *StandaloneReader) render() error {
 	}
 
 	if err != nil {
-		fmt.Printf("Failed to load image: %v\n", err)
+		fmt.Fprintf(r.tty, "Failed to load image: %v\n", err)
 	} else {
-		fmt.Print(imageStr)
+		fmt.Fprint(r.tty, imageStr)
 	}
 
 	// Render footer
-	fmt.Printf("\n\n[Space/l] Next  [h/Backspace] Prev  [n] Next Chapter  [p] Prev Chapter  [q] Exit")
+	fmt.Fprintf(r.tty, "\n\n[Space/l] Next  [h/Backspace] Prev  [n] Next Chapter  [p] Prev Chapter  [q] Exit")
 
 	return nil
 }

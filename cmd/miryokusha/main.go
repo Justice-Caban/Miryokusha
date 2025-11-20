@@ -40,6 +40,14 @@ func runTUIMode() {
 
 // runReaderMode runs the standalone reader without alt-screen
 func runReaderMode() {
+	// DEBUG: Log to file
+	logFile, _ := os.OpenFile("/tmp/miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if logFile != nil {
+		defer logFile.Close()
+		fmt.Fprintf(logFile, "\n=== runReaderMode called ===\n")
+		fmt.Fprintf(logFile, "Args: %v\n", os.Args)
+	}
+
 	// Parse reader flags
 	readerFlags := flag.NewFlagSet("reader", flag.ExitOnError)
 	mangaJSON := readerFlags.String("manga", "", "Manga data (JSON)")
@@ -48,7 +56,16 @@ func runReaderMode() {
 
 	if err := readerFlags.Parse(os.Args[2:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing reader flags: %v\n", err)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR parsing flags: %v\n", err)
+		}
 		os.Exit(1)
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "Manga JSON length: %d\n", len(*mangaJSON))
+		fmt.Fprintf(logFile, "Chapter JSON length: %d\n", len(*chapterJSON))
+		fmt.Fprintf(logFile, "Chapters JSON length: %d\n", len(*chaptersJSON))
 	}
 
 	// Decode manga
