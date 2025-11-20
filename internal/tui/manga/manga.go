@@ -1,7 +1,10 @@
 package manga
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/Justice-Caban/Miryokusha/internal/source"
@@ -351,10 +354,43 @@ func (m Model) loadChapters() tea.Msg {
 }
 
 func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
-	return func() tea.Msg {
-		return OpenChapterMsg{
-			Manga:   m.manga,
-			Chapter: chapter,
+	// Launch standalone reader using tea.Exec to bypass alt-screen limitations
+	// This allows Kitty graphics protocol to work properly
+
+	// Serialize data to JSON for passing to reader mode
+	mangaJSON, err := json.Marshal(m.manga)
+	if err != nil {
+		return func() tea.Msg {
+			return fmt.Errorf("failed to marshal manga: %w", err)
 		}
 	}
+
+	chapterJSON, err := json.Marshal(chapter)
+	if err != nil {
+		return func() tea.Msg {
+			return fmt.Errorf("failed to marshal chapter: %w", err)
+		}
+	}
+
+	chaptersJSON, err := json.Marshal(m.chapters)
+	if err != nil {
+		return func() tea.Msg {
+			return fmt.Errorf("failed to marshal chapters: %w", err)
+		}
+	}
+
+	// Launch reader mode using tea.ExecProcess
+	return tea.ExecProcess(exec.Command(
+		os.Args[0], // Call ourselves
+		"reader",
+		"--manga", string(mangaJSON),
+		"--chapter", string(chapterJSON),
+		"--chapters", string(chaptersJSON),
+	), func(err error) tea.Msg {
+		// When reader exits, return to this view
+		if err != nil {
+			return fmt.Errorf("reader error: %w", err)
+		}
+		return nil
+	})
 }
