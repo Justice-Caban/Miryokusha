@@ -157,11 +157,30 @@ func (r *StandaloneReader) Run() error {
 		// Drain all pending input
 		drainBuf := make([]byte, 1024)
 		totalDrained := 0
-		for {
-			n, _ := tty.Read(drainBuf)
-			if n == 0 {
+		maxIterations := 100 // Safety limit to prevent infinite loops
+
+		for iteration := 0; iteration < maxIterations; iteration++ {
+			n, err := tty.Read(drainBuf)
+
+			if logFile != nil && iteration < 5 {
+				fmt.Fprintf(logFile, "Drain iteration %d: n=%d, err=%v\n", iteration, n, err)
+			}
+
+			// In non-blocking mode, EAGAIN/EWOULDBLOCK means no more data
+			if err != nil {
+				if logFile != nil {
+					fmt.Fprintf(logFile, "Drain stopped with error: %v (this is normal)\n", err)
+				}
 				break
 			}
+
+			if n == 0 {
+				if logFile != nil {
+					fmt.Fprintf(logFile, "Drain stopped: read 0 bytes\n")
+				}
+				break
+			}
+
 			totalDrained += n
 			if logFile != nil && totalDrained < 100 {
 				// Log first few bytes for debugging
@@ -170,6 +189,7 @@ func (r *StandaloneReader) Run() error {
 				}
 			}
 		}
+
 		if logFile != nil {
 			fmt.Fprintf(logFile, "Drained %d bytes from TTY buffer\n", totalDrained)
 		}
