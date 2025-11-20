@@ -72,7 +72,9 @@ func NewStandaloneReader(
 // Run starts the standalone reader
 func (r *StandaloneReader) Run() error {
 	// DEBUG: Write to a log file to see if we even get here
-	logFile, err := os.OpenFile("/tmp/miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	homeDir, _ := os.UserHomeDir()
+	logPath := homeDir + "/miryokusha-reader.log"
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err == nil {
 		defer logFile.Close()
 		fmt.Fprintf(logFile, "\n=== Reader started at %v ===\n", time.Now())
