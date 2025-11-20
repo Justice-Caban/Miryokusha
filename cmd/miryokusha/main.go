@@ -40,15 +40,17 @@ func runTUIMode() {
 
 // runReaderMode runs the standalone reader without alt-screen
 func runReaderMode() {
-	// DEBUG: Log to file in home directory
-	homeDir, _ := os.UserHomeDir()
-	logPath := homeDir + "/miryokusha-reader.log"
-	logFile, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// DEBUG: Log to file in current directory (guaranteed writable)
+	logPath := "./miryokusha-reader.log"
+	logFile, logErr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if logFile != nil {
 		defer logFile.Close()
 		fmt.Fprintf(logFile, "\n=== runReaderMode called ===\n")
 		fmt.Fprintf(logFile, "Args: %v\n", os.Args)
 		fmt.Fprintf(logFile, "Log path: %s\n", logPath)
+	} else if logErr != nil {
+		// If we can't even create the log file, write to stderr
+		fmt.Fprintf(os.Stderr, "WARNING: Could not create log file: %v\n", logErr)
 	}
 
 	// Parse reader flags
