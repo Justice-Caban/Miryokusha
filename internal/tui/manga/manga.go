@@ -105,6 +105,17 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 	case "enter":
+		// DEBUG: Log that Enter was pressed
+		logFile, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "\n=== Enter key pressed in manga view ===\n")
+			fmt.Fprintf(logFile, "Cursor: %d, Total chapters: %d\n", m.cursor, len(m.chapters))
+			if m.cursor < len(m.chapters) {
+				fmt.Fprintf(logFile, "Selected chapter: %.1f - %s\n", m.chapters[m.cursor].ChapterNumber, m.chapters[m.cursor].Title)
+			}
+			logFile.Close()
+		}
+
 		// Open selected chapter in reader
 		if m.cursor < len(m.chapters) {
 			selectedChapter := m.chapters[m.cursor]
@@ -369,6 +380,13 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 	// Serialize data to JSON for passing to reader mode
 	mangaJSON, err := json.Marshal(m.manga)
 	if err != nil {
+		if logFile != nil {
+			logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if logFile != nil {
+				fmt.Fprintf(logFile, "ERROR: Failed to marshal manga: %v\n", err)
+				logFile.Close()
+			}
+		}
 		return func() tea.Msg {
 			return fmt.Errorf("failed to marshal manga: %w", err)
 		}
@@ -376,6 +394,11 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 
 	chapterJSON, err := json.Marshal(chapter)
 	if err != nil {
+		logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: Failed to marshal chapter: %v\n", err)
+			logFile.Close()
+		}
 		return func() tea.Msg {
 			return fmt.Errorf("failed to marshal chapter: %w", err)
 		}
@@ -383,8 +406,25 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 
 	chaptersJSON, err := json.Marshal(m.chapters)
 	if err != nil {
+		logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "ERROR: Failed to marshal chapters: %v\n", err)
+			logFile.Close()
+		}
 		return func() tea.Msg {
 			return fmt.Errorf("failed to marshal chapters: %w", err)
+		}
+	}
+
+	// Get the absolute path to the current binary
+	execPath, err := os.Executable()
+	if err != nil {
+		// Fallback to os.Args[0]
+		execPath = os.Args[0]
+		logFile, _ = os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "WARNING: Could not get executable path, using os.Args[0]: %s\n", execPath)
+			logFile.Close()
 		}
 	}
 
@@ -392,18 +432,28 @@ func (m Model) openChapter(chapter *source.Chapter) tea.Cmd {
 	logFile2, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if logFile2 != nil {
 		fmt.Fprintf(logFile2, "JSON marshaling successful, launching tea.ExecProcess\n")
-		fmt.Fprintf(logFile2, "Command: %s reader --manga <json> --chapter <json> --chapters <json>\n", os.Args[0])
+		fmt.Fprintf(logFile2, "Executable path: %s\n", execPath)
+		fmt.Fprintf(logFile2, "os.Args[0]: %s\n", os.Args[0])
+		fmt.Fprintf(logFile2, "Command: %s reader [with JSON args]\n", execPath)
 		logFile2.Close()
 	}
 
-	// Launch reader mode using tea.ExecProcess
-	return tea.ExecProcess(exec.Command(
-		os.Args[0], // Call ourselves
+	// Create the command with absolute path
+	cmd := exec.Command(
+		execPath,
 		"reader",
 		"--manga", string(mangaJSON),
 		"--chapter", string(chapterJSON),
 		"--chapters", string(chaptersJSON),
-	), func(err error) tea.Msg {
+	)
+
+	// Make sure stdin/stdout/stderr are properly connected
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Launch reader mode using tea.ExecProcess
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		// DEBUG: Log when reader exits
 		logFile3, _ := os.OpenFile("./miryokusha-reader.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if logFile3 != nil {
